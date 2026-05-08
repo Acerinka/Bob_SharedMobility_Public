@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Shader Graphs_SG_BobLiquid Urgent
+  m_Name: MAT_BobLiquidUrgent
   m_Shader: {fileID: -6465566751694194690, guid: bffea8f9eee08174a8c1625b8906d6e5,
     type: 3}
   m_Parent: {fileID: 0}

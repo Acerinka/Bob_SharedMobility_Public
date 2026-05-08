@@ -17,7 +17,6 @@ namespace Bob.SharedMobility
         public static void Ensure()
         {
             EnsureEventSystem();
-            EnsurePhysicsRaycaster();
         }
 
         private static void EnsureEventSystem()
@@ -49,7 +48,8 @@ namespace Bob.SharedMobility
             }
         }
 
-        private static void EnsurePhysicsRaycaster()
+        [System.Obsolete("Use SceneWorldPointerRouter.Ensure() for world collider input so UI remains the first-class pointer route.")]
+        public static void EnsurePhysicsRaycasters()
         {
             Camera[] cameras = Camera.allCameras;
             bool hasCandidate = false;

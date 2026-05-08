@@ -27,7 +27,7 @@ namespace Bob.SharedMobility
 
             if (ensurePointerRouting)
             {
-                ScenePointerRouting.Ensure();
+                SceneWorldPointerRouter.Ensure();
             }
         }
 

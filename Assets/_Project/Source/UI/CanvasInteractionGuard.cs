@@ -13,7 +13,7 @@ namespace Bob.SharedMobility
 
         [Header("Bootstrap")]
         public bool autoAssignCamera = true;
-        public bool autoDisableBlockingImages = true;
+        public bool autoDisableBlockingImages = false;
         [SerializeField] private bool ensurePointerRouting = true;
 
         private void Awake()

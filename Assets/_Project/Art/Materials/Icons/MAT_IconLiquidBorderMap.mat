@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Shader Graphs_SG_IconLiquidBorder _MAP
+  m_Name: MAT_IconLiquidBorderMap
   m_Shader: {fileID: -6465566751694194690, guid: 8d31cd734d008b24ebbbbff868b7f4ce,
     type: 3}
   m_Parent: {fileID: 0}

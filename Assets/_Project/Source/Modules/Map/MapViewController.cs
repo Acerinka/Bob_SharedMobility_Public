@@ -27,7 +27,7 @@ namespace Bob.SharedMobility
         public ViewState currentState = ViewState.Small_Icon;
 
         [Header("Pointer Collider")]
-        [Tooltip("Collider used by MapGestureInputController and EventSystem physics raycasts.")]
+        [Tooltip("Collider used by MapGestureInputController and the scene world pointer router.")]
         public BoxCollider targetCollider;
         public Vector3 smallColliderSize = new Vector3(0.2f, 0.2f, 0.1f);
         public Vector3 mediumColliderSize = new Vector3(1.5f, 1.0f, 0.1f);

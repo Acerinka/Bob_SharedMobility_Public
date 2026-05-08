@@ -17,6 +17,16 @@ namespace Bob.SharedMobility
             return Input.GetMouseButtonDown(0);
         }
 
+        public static bool IsPrimaryPointerHeld()
+        {
+            return Input.GetMouseButton(0);
+        }
+
+        public static bool WasPrimaryPointerReleased()
+        {
+            return Input.GetMouseButtonUp(0);
+        }
+
         public static Vector2 PointerPosition => Input.mousePosition;
 
         public static bool WasPrimaryActionPressed()

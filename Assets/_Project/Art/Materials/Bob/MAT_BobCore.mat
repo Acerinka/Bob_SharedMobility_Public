@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Shader Graphs_SG_BobCore
+  m_Name: MAT_BobCore
   m_Shader: {fileID: -6465566751694194690, guid: 901ba29fec80d4944b1a69c7e262fe3a,
     type: 3}
   m_Parent: {fileID: 0}

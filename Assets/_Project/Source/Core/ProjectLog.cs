@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using UnityEngine;
+using UnityDebug = UnityEngine.Debug;
 
 namespace Bob.SharedMobility
 {
@@ -11,17 +12,17 @@ namespace Bob.SharedMobility
         [Conditional("DEVELOPMENT_BUILD")]
         public static void Info(string message, Object context = null)
         {
-            Debug.Log($"{Prefix} {message}", context);
+            UnityDebug.Log($"{Prefix} {message}", context);
         }
 
         public static void Warning(string message, Object context = null)
         {
-            Debug.LogWarning($"{Prefix} {message}", context);
+            UnityDebug.LogWarning($"{Prefix} {message}", context);
         }
 
         public static void Error(string message, Object context = null)
         {
-            Debug.LogError($"{Prefix} {message}", context);
+            UnityDebug.LogError($"{Prefix} {message}", context);
         }
     }
 }
