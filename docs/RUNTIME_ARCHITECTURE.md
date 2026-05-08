@@ -36,6 +36,21 @@ The `Backdoor Registry` list in `RuntimeDiagnosticsHub` is the Inspector-facing 
 
 Feature scripts should not invent their own always-on debug backdoors. Add new diagnostics to `RuntimeDiagnosticsHub` so they can be audited and disabled together.
 
+### Backdoor Location
+
+In the Unity Hierarchy, select `Project_Runtime`. In the Inspector, open:
+
+- `RuntimeDiagnosticsHub > Backdoor Registry`: all shortcut/backdoor entries, owners, enabled state, keyboard shortcut, and gamepad shortcut.
+- `RuntimeDiagnosticsHub > Voice Command Diagnostics`: text used by the voice command injection backdoor.
+- component context menu `Backdoor/Inject Voice Command`: sends the diagnostic voice command without microphone/API access.
+- component context menu `Backdoor/Log Registry`: prints every registered backdoor to the Console.
+
+Voice diagnostics are split into three explicit entries:
+
+- `Voice input shortcut`: real microphone recording shortcut, default hold `F` / gamepad South in Development.
+- `Voice command injection`: direct text command injection, independent of microphone and OpenAI API key.
+- `Voice debug WAV capture`: optional WAV file dump for audio debugging.
+
 ## Navigation Direction
 
 `AppNavigationService` is the runtime owner for app-level navigation. Dock buttons and Bob-triggered shortcuts can still use their existing scene references, but they route through the service when available.

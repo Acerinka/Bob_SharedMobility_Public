@@ -4278,13 +4278,27 @@ MonoBehaviour:
     gamepadShortcut: 0
     inspectorNotes: Manual trigger for the lane assist scenario while the map is full screen.
   - kind: 3
+    label: Voice input shortcut
+    owner: VoiceCommandRecognizer
+    enabledInDevelopment: 1
+    keyboardShortcut: 102
+    gamepadShortcut: 1
+    inspectorNotes: Hold this shortcut to record real microphone input for voice command transcription.
+  - kind: 4
+    label: Voice command injection
+    owner: RuntimeDiagnosticsHub
+    enabledInDevelopment: 1
+    keyboardShortcut: 0
+    gamepadShortcut: 0
+    inspectorNotes: Injects the text in Voice Command Diagnostics without microphone or API access.
+  - kind: 5
     label: Voice debug WAV capture
     owner: VoiceCommandRecognizer
     enabledInDevelopment: 0
     keyboardShortcut: 0
     gamepadShortcut: 0
     inspectorNotes: Writes captured voice audio to Application.persistentDataPath for debugging.
-  - kind: 4
+  - kind: 6
     label: Gamepad input logging
     owner: GamepadInputDebugger
     enabledInDevelopment: 0
@@ -4296,6 +4310,7 @@ MonoBehaviour:
   laneAssistScenario: {fileID: 791924073}
   voiceCommandRecognizer: {fileID: 1524738803}
   gamepadInputDebugger: {fileID: 0}
+  injectedVoiceCommandText: open map
 --- !u!114 &2101000003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16247,6 +16262,7 @@ MonoBehaviour:
   saveDebugWav: 0
   bob: {fileID: 919132147705102362}
   globalDirector: {fileID: 779085252}
+  inputEnabled: 1
   keyboardKey: 20
   gamepadButton: 1
   holdDuration: 1

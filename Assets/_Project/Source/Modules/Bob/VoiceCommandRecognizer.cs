@@ -35,6 +35,7 @@ namespace Bob.SharedMobility
         public BobInteractionDirector globalDirector;
 
         [Header("Input")]
+        public bool inputEnabled = true;
         public Key keyboardKey = Key.F;
         public VoiceCommandButton gamepadButton = VoiceCommandButton.ButtonSouth;
         public float holdDuration = 2.0f;
@@ -68,6 +69,12 @@ namespace Bob.SharedMobility
 
         private void Update()
         {
+            if (!inputEnabled)
+            {
+                CancelPendingInput();
+                return;
+            }
+
             bool isInputActive = ProjectInput.IsVoiceCommandPressed(keyboardKey, gamepadButton);
 
             if (isInputActive)
@@ -190,6 +197,53 @@ namespace Bob.SharedMobility
                 }
             }
 
+            SetBobVolume(0f);
+        }
+
+        public void ConfigureInputBackdoor(bool enabled, Key keyboardShortcut, VoiceCommandButton gamepadShortcut)
+        {
+            inputEnabled = enabled;
+            keyboardKey = keyboardShortcut;
+            gamepadButton = gamepadShortcut;
+
+            if (!inputEnabled)
+            {
+                CancelPendingInput();
+            }
+        }
+
+        public void InjectRecognizedCommand(string text)
+        {
+            string cleanText = NormalizeRecognizedText(text);
+            if (cleanText.Length < 2)
+            {
+                ProjectLog.Warning("Ignored empty injected voice command.", this);
+                return;
+            }
+
+            ProjectLog.Info($"Injected voice command: {cleanText}", this);
+
+            if (globalDirector)
+            {
+                globalDirector.ProcessVoiceCommand(cleanText);
+            }
+
+            if (bob)
+            {
+                bob.TriggerAction(BobController.BobActionType.JumpHigh);
+            }
+        }
+
+        private void CancelPendingInput()
+        {
+            if (_isRecording && !string.IsNullOrEmpty(_defaultDevice))
+            {
+                Microphone.End(_defaultDevice);
+            }
+
+            _isRecording = false;
+            _isPressing = false;
+            _pressTimer = 0f;
             SetBobVolume(0f);
         }
 

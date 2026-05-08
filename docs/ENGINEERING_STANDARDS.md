@@ -48,3 +48,4 @@ This Unity project treats runtime code as product code, not scene-local prototyp
 - Scene references should be serialized explicitly where possible.
 - Runtime fallback discovery is acceptable only in core bootstrap/resolver classes.
 - Debug utilities must be controlled by `RuntimeDiagnosticsHub`, disabled in release behavior, or guarded by `UNITY_EDITOR || DEVELOPMENT_BUILD`.
+- Voice debugging must expose both real input shortcuts and no-microphone command injection through `RuntimeDiagnosticsHub`.
