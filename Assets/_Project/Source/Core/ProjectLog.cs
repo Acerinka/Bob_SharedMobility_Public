@@ -10,17 +10,17 @@ namespace Bob.SharedMobility
 
         [Conditional("UNITY_EDITOR")]
         [Conditional("DEVELOPMENT_BUILD")]
-        public static void Info(string message, Object context = null)
+        public static void Info(string message, UnityEngine.Object context = null)
         {
             UnityDebug.Log($"{Prefix} {message}", context);
         }
 
-        public static void Warning(string message, Object context = null)
+        public static void Warning(string message, UnityEngine.Object context = null)
         {
             UnityDebug.LogWarning($"{Prefix} {message}", context);
         }
 
-        public static void Error(string message, Object context = null)
+        public static void Error(string message, UnityEngine.Object context = null)
         {
             UnityDebug.LogError($"{Prefix} {message}", context);
         }

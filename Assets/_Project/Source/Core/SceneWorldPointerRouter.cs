@@ -23,7 +23,7 @@ namespace Bob.SharedMobility
         [SerializeField] private float maxRaycastDistance = 1000f;
 
         [Header("UI Priority")]
-        [SerializeField] private bool blockWorldWhenActionableUiHit = true;
+        [SerializeField] private bool blockWorldWhenForegroundUiHit = true;
 
         private readonly List<RaycastResult> _uiRaycastResults = new List<RaycastResult>(16);
 
@@ -86,7 +86,7 @@ namespace Bob.SharedMobility
         {
             ClearPressedTarget();
 
-            if (IsPointerBlockedByActionableUi(pointerPosition)) return;
+            if (IsPointerBlockedByForegroundUi(pointerPosition)) return;
             if (!TryGetWorldPointerHit(pointerPosition, out RaycastHit hit)) return;
 
             GameObject hitObject = hit.collider.gameObject;
@@ -123,7 +123,7 @@ namespace Bob.SharedMobility
         {
             if (_pressedTarget == null) return;
 
-            if (IsPointerBlockedByActionableUi(pointerPosition)
+            if (IsPointerBlockedByForegroundUi(pointerPosition)
                 || !TryGetWorldPointerHit(pointerPosition, out RaycastHit hit))
             {
                 CancelPressedTarget(pointerPosition);
@@ -157,7 +157,7 @@ namespace Bob.SharedMobility
         {
             if (_pressedTarget == null) return;
 
-            if (IsPointerBlockedByActionableUi(pointerPosition)
+            if (IsPointerBlockedByForegroundUi(pointerPosition)
                 || !TryGetWorldPointerHit(pointerPosition, out RaycastHit hit))
             {
                 CancelPressedTarget(pointerPosition);
@@ -206,9 +206,10 @@ namespace Bob.SharedMobility
             return false;
         }
 
-        private bool IsPointerBlockedByActionableUi(Vector2 pointerPosition)
+        private bool IsPointerBlockedByForegroundUi(Vector2 pointerPosition)
         {
-            if (!blockWorldWhenActionableUiHit) return false;
+            if (!blockWorldWhenForegroundUiHit) return false;
+            if (IsBlockedByNavigationLayer()) return true;
 
             EventSystem eventSystem = EventSystem.current;
             if (eventSystem == null) return false;
@@ -227,13 +228,26 @@ namespace Bob.SharedMobility
                 if (target == null) continue;
                 if (result.module is PhysicsRaycaster) continue;
 
-                if (IsActionableUi(target))
+                if (BlocksWorldPointer(target))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        private static bool IsBlockedByNavigationLayer()
+        {
+            AppNavigationService navigationService = AppNavigationService.Instance;
+            return navigationService != null && navigationService.BlocksWorldInput;
+        }
+
+        private static bool BlocksWorldPointer(GameObject target)
+        {
+            return IsActionableUi(target)
+                || IsCanvasGroupBlocker(target)
+                || IsVisibleRaycastGraphicInsideBlockingGroup(target);
         }
 
         private static bool IsActionableUi(GameObject target)
@@ -253,6 +267,29 @@ namespace Bob.SharedMobility
             }
 
             return handler != null && handler.GetComponentInParent<Canvas>() != null;
+        }
+
+        private static bool IsCanvasGroupBlocker(GameObject target)
+        {
+            CanvasGroup[] groups = target.GetComponentsInParent<CanvasGroup>(false);
+            foreach (CanvasGroup group in groups)
+            {
+                if (group != null && group.isActiveAndEnabled && group.blocksRaycasts && group.alpha > 0.01f)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsVisibleRaycastGraphicInsideBlockingGroup(GameObject target)
+        {
+            Graphic graphic = target.GetComponent<Graphic>();
+            if (graphic == null || !graphic.raycastTarget || !graphic.IsActive()) return false;
+            if (graphic.canvasRenderer.GetAlpha() <= 0.01f || graphic.color.a <= 0.01f) return false;
+
+            return IsCanvasGroupBlocker(target);
         }
 
         private static bool HasWorldPointerTarget(GameObject target)

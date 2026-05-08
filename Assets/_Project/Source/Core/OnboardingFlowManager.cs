@@ -68,6 +68,7 @@ namespace Bob.SharedMobility
         public AudioClip introAudio;
 
         [Header("Skip Chapter")]
+        public bool skipChoiceEndsIntroImmediately = true;
         public ChapterConfig skipChapter;
 
         [Header("Yes Chapter")]
@@ -77,7 +78,7 @@ namespace Bob.SharedMobility
         private Coroutine _currentRoutine;
         private Coroutine _audioRoutine;
 
-        private IEnumerator Start()
+        private void Awake()
         {
             _sfxAudio = GetComponent<AudioSource>();
 
@@ -86,6 +87,11 @@ namespace Bob.SharedMobility
                 bgmSource = gameObject.AddComponent<AudioSource>();
             }
 
+            ApplyColdBootVisibilityState();
+        }
+
+        private IEnumerator Start()
+        {
             yield return null;
             FullRestart();
         }
@@ -180,7 +186,7 @@ namespace Bob.SharedMobility
         {
             HideAll();
             if (panelOnboarding) panelOnboarding.SetActive(true);
-            if (introButtonGroup) introButtonGroup.SetActive(false);
+            ShowIntroChoiceButtons(false);
 
             StopCurrentRoutine();
             _currentRoutine = StartCoroutine(RunIntroRoutine());
@@ -188,6 +194,12 @@ namespace Bob.SharedMobility
 
         public void OnClick_ChooseSkip()
         {
+            if (skipChoiceEndsIntroImmediately)
+            {
+                CompleteIntroImmediately();
+                return;
+            }
+
             StartChapter(skipChapter);
         }
 
@@ -224,13 +236,7 @@ namespace Bob.SharedMobility
             yield return PlayStep(introStep1);
             yield return PlayStep(introStep2);
 
-            if (introButtonGroup)
-            {
-                introButtonGroup.SetActive(true);
-                introButtonGroup.transform.DOKill();
-                introButtonGroup.transform.localScale = Vector3.zero;
-                introButtonGroup.transform.DOScale(Vector3.one, 0.5f).SetEase(Ease.OutBack);
-            }
+            ShowIntroChoiceButtons(true);
         }
 
         private void StartChapter(ChapterConfig chapter)
@@ -313,6 +319,14 @@ namespace Bob.SharedMobility
             if (bgmSource) bgmSource.Stop();
         }
 
+        private void CompleteIntroImmediately()
+        {
+            StopActiveRoutines();
+            KillFlowTweens();
+            if (_sfxAudio) _sfxAudio.Stop();
+            EndIntroFlow();
+        }
+
         private void HideAll()
         {
             if (panelWelcome) panelWelcome.SetActive(false);
@@ -320,6 +334,33 @@ namespace Bob.SharedMobility
             if (panelOnboarding) panelOnboarding.SetActive(false);
             if (pageMain) pageMain.SetActive(false);
             SetSubPagesActive(false);
+        }
+
+        private void ApplyColdBootVisibilityState()
+        {
+            if (introCanvas) introCanvas.SetActive(true);
+            if (mainAppSystem) mainAppSystem.SetActive(false);
+            HideAll();
+            if (panelWelcome) panelWelcome.SetActive(true);
+            if (introButtonGroup) introButtonGroup.SetActive(false);
+        }
+
+        private void ShowIntroChoiceButtons(bool animated)
+        {
+            if (!introButtonGroup) return;
+
+            bool wasActive = introButtonGroup.activeSelf;
+            introButtonGroup.SetActive(true);
+            introButtonGroup.transform.DOKill();
+
+            if (!animated || wasActive)
+            {
+                introButtonGroup.transform.localScale = Vector3.one;
+                return;
+            }
+
+            introButtonGroup.transform.localScale = Vector3.zero;
+            introButtonGroup.transform.DOScale(Vector3.one, 0.5f).SetEase(Ease.OutBack);
         }
 
         private void SetSubPagesActive(bool isActive)

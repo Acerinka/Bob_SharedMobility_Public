@@ -4,19 +4,19 @@ namespace Bob.SharedMobility
 {
     public static class GamepadButtonReader
     {
-        public static bool IsPressed(CloudBrainButton button)
+        public static bool IsPressed(VoiceCommandButton button)
         {
             var gamepad = Gamepad.current;
-            if (gamepad == null || button == CloudBrainButton.None) return false;
+            if (gamepad == null || button == VoiceCommandButton.None) return false;
 
             switch (button)
             {
-                case CloudBrainButton.ButtonSouth: return gamepad.buttonSouth.isPressed;
-                case CloudBrainButton.ButtonEast: return gamepad.buttonEast.isPressed;
-                case CloudBrainButton.ButtonWest: return gamepad.buttonWest.isPressed;
-                case CloudBrainButton.ButtonNorth: return gamepad.buttonNorth.isPressed;
-                case CloudBrainButton.LeftShoulder: return gamepad.leftShoulder.isPressed;
-                case CloudBrainButton.RightShoulder: return gamepad.rightShoulder.isPressed;
+                case VoiceCommandButton.ButtonSouth: return gamepad.buttonSouth.isPressed;
+                case VoiceCommandButton.ButtonEast: return gamepad.buttonEast.isPressed;
+                case VoiceCommandButton.ButtonWest: return gamepad.buttonWest.isPressed;
+                case VoiceCommandButton.ButtonNorth: return gamepad.buttonNorth.isPressed;
+                case VoiceCommandButton.LeftShoulder: return gamepad.leftShoulder.isPressed;
+                case VoiceCommandButton.RightShoulder: return gamepad.rightShoulder.isPressed;
                 default: return false;
             }
         }

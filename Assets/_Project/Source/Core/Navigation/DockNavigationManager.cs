@@ -10,7 +10,12 @@ namespace Bob.SharedMobility
         public BobController bobActor;
         public MapViewController mapController;
 
+        [Header("Navigation Service")]
+        public AppNavigationService navigationService;
+
         private DockPanelController _currentActiveApp;
+
+        public DockPanelController CurrentActiveApp => _currentActiveApp;
 
         private void Awake()
         {
@@ -20,6 +25,11 @@ namespace Bob.SharedMobility
             }
 
             Instance = this;
+
+            if (!navigationService)
+            {
+                navigationService = FindObjectOfType<AppNavigationService>(true);
+            }
         }
 
         private void OnDestroy()
@@ -45,7 +55,14 @@ namespace Bob.SharedMobility
 
             if (targetApp == null)
             {
+                DockPanelController closedApp = _currentActiveApp;
                 _currentActiveApp = null;
+
+                if (closedApp != null)
+                {
+                    navigationService?.NotifyDockPanelClosed(closedApp);
+                }
+
                 return;
             }
 
@@ -61,10 +78,13 @@ namespace Bob.SharedMobility
             }
 
             UpdateBobAvoidance(targetApp);
+            navigationService?.NotifyDockPanelOpened(targetApp, subMenu);
         }
 
         public void CloseCurrentApp()
         {
+            DockPanelController closingApp = _currentActiveApp;
+
             if (_currentActiveApp != null)
             {
                 _currentActiveApp.CloseEntireApp();
@@ -74,6 +94,11 @@ namespace Bob.SharedMobility
             if (bobActor)
             {
                 bobActor.ReturnToIdleDelayed();
+            }
+
+            if (closingApp != null)
+            {
+                navigationService?.NotifyDockPanelClosed(closingApp);
             }
         }
 

@@ -15,6 +15,7 @@ Project-owned content lives under `Assets/_Project`:
 
 - `Scenes`: production scenes.
 - `Source`: runtime scripts.
+  - `Source/Core/Navigation`: app-shell navigation, screen IDs, modal commands, and shared panel presentation.
 - `Prefabs`: project prefabs and local models.
 - `Art/Textures`: UI, onboarding, navigation, reference, and vehicle-control textures.
 - `Art/Materials`: Bob, icon, and liquid materials.
@@ -39,3 +40,11 @@ See `docs/ASSET_NAMING.md`.
 ## Engineering Standards
 
 See `docs/ENGINEERING_STANDARDS.md`.
+
+## Runtime Architecture
+
+See `docs/RUNTIME_ARCHITECTURE.md`.
+
+## UI Navigation Model
+
+See `docs/UI_NAVIGATION_MODEL.md`.

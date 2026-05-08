@@ -54,7 +54,7 @@ namespace Bob.SharedMobility
             return Keyboard.current != null && Keyboard.current[key].isPressed;
         }
 
-        public static bool IsVoiceCommandPressed(Key keyboardKey, CloudBrainButton gamepadButton)
+        public static bool IsVoiceCommandPressed(Key keyboardKey, VoiceCommandButton gamepadButton)
         {
             return IsKeyboardKeyPressed(keyboardKey)
                 || GamepadButtonReader.IsPressed(gamepadButton);

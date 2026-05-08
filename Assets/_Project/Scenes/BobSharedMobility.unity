@@ -255,8 +255,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
@@ -331,8 +331,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0}
   m_RaycastTarget: 1
@@ -4207,6 +4207,137 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2101000000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2101000001}
+  - component: {fileID: 2101000002}
+  - component: {fileID: 2101000003}
+  m_Layer: 0
+  m_Name: Project_Runtime
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2101000001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2101000000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2101000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2101000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4fb9e3cbcdf04b9aa64ecdb71f6a1bb0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  runtimeProfile: 1
+  applyAutomatically: 1
+  logAppliedProfile: 0
+  backdoorControls:
+  - kind: 0
+    label: Bob target shortcuts
+    owner: BobInteractionDirector
+    enabledInDevelopment: 1
+    keyboardShortcut: 0
+    gamepadShortcut: 0
+    inspectorNotes: Development-only target jumps. Individual target keys live on BobInteractionDirector.registeredTargets.
+  - kind: 1
+    label: Bob skin hotkeys
+    owner: BobController
+    enabledInDevelopment: 1
+    keyboardShortcut: 49
+    gamepadShortcut: 0
+    inspectorNotes: Alpha1/Alpha2/Alpha3 switch Bob skins for visual QA.
+  - kind: 2
+    label: Lane assist scenario trigger
+    owner: LaneAssistScenarioController
+    enabledInDevelopment: 1
+    keyboardShortcut: 115
+    gamepadShortcut: 0
+    inspectorNotes: Manual trigger for the lane assist scenario while the map is full screen.
+  - kind: 3
+    label: Voice debug WAV capture
+    owner: VoiceCommandRecognizer
+    enabledInDevelopment: 0
+    keyboardShortcut: 0
+    gamepadShortcut: 0
+    inspectorNotes: Writes captured voice audio to Application.persistentDataPath for debugging.
+  - kind: 4
+    label: Gamepad input logging
+    owner: GamepadInputDebugger
+    enabledInDevelopment: 0
+    keyboardShortcut: 0
+    gamepadShortcut: 0
+    inspectorNotes: Logs every gamepad button press in editor/development builds.
+  bobInteractionDirector: {fileID: 779085252}
+  bobController: {fileID: 919132147705102362}
+  laneAssistScenario: {fileID: 791924073}
+  voiceCommandRecognizer: {fileID: 1524738803}
+  gamepadInputDebugger: {fileID: 0}
+--- !u!114 &2101000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2101000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9768a77a27db40fd8849fdbf894160bf, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  dockNavigationManager: {fileID: 518041275}
+  mapController: {fileID: 80920266}
+  discoverScreensAutomatically: 0
+  screenControllers: []
+  discoverDockPanelsAutomatically: 0
+  dockScreens:
+  - screenId: 30
+    dockPanel: {fileID: 1694366109}
+    inspectorNotes: Apps dock panel.
+  - screenId: 40
+    dockPanel: {fileID: 505540553}
+    inspectorNotes: Climate/A-C dock panel.
+  - screenId: 50
+    dockPanel: {fileID: 1091278260}
+    inspectorNotes: Volume dock panel.
+  - screenId: 60
+    dockPanel: {fileID: 1164086117}
+    inspectorNotes: Settings dock panel.
+  - screenId: 70
+    dockPanel: {fileID: 1399529701}
+    inspectorNotes: Profile dock panel.
+  - screenId: 80
+    dockPanel: {fileID: 1654403463}
+    inspectorNotes: Support dock panel.
+  currentScreen: 10
+  currentLayer: 0
+  currentModal: 0
+  worldInputBlocked: 0
+  currentDockPanel: {fileID: 0}
+  currentSubPanel: {fileID: 0}
 --- !u!1 &400353219
 GameObject:
   m_ObjectHideFlags: 0
@@ -4222,7 +4353,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &400353220
 Transform:
   m_ObjectHideFlags: 0
@@ -4942,7 +5073,7 @@ GameObject:
   - component: {fileID: 458889081}
   - component: {fileID: 458889080}
   m_Layer: 0
-  m_Name: Sytem_IntroFlow
+  m_Name: System_OnboardingFlow
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5039,6 +5170,7 @@ MonoBehaviour:
     action: 2
   introButtonGroup: {fileID: 1169775165}
   introAudio: {fileID: 8300000, guid: 556354417130c984e99300163d77809f, type: 3}
+  skipChoiceEndsIntroImmediately: 1
   skipChapter:
     audioPlaylist:
     - {fileID: 8300000, guid: 95fd9a524bdce8a4498767b8d632f36f, type: 3}
@@ -5393,6 +5525,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f90648115aeb1d64389886e500c8f685, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  screenId: 40
+  navigationLayer: 10
   myDockItem: {fileID: 1501481418}
   causesBobAvoid: 0
   myLevel2Panel: {fileID: 645803262}
@@ -5507,7 +5641,7 @@ GameObject:
   - component: {fileID: 518041276}
   - component: {fileID: 518041275}
   m_Layer: 0
-  m_Name: GlobaLDockManager
+  m_Name: System_DockNavigation
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5527,6 +5661,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   bobActor: {fileID: 919132147705102362}
   mapController: {fileID: 80920266}
+  navigationService: {fileID: 2101000003}
 --- !u!4 &518041276
 Transform:
   m_ObjectHideFlags: 0
@@ -8354,7 +8489,7 @@ GameObject:
   - component: {fileID: 779085253}
   - component: {fileID: 779085252}
   m_Layer: 0
-  m_Name: BobInteractionDirector
+  m_Name: System_BobInteractionDirector
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8731,7 +8866,7 @@ GameObject:
   - component: {fileID: 791924073}
   - component: {fileID: 791924075}
   m_Layer: 0
-  m_Name: ScemarioSystem
+  m_Name: System_LaneAssistScenario
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -10911,7 +11046,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1018385167
 Transform:
   m_ObjectHideFlags: 0
@@ -12125,7 +12260,7 @@ GameObject:
   - component: {fileID: 1091278261}
   - component: {fileID: 1091278260}
   m_Layer: 0
-  m_Name: DockLogic_Volme
+  m_Name: DockLogic_Volume
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -12143,6 +12278,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f90648115aeb1d64389886e500c8f685, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  screenId: 50
+  navigationLayer: 10
   myDockItem: {fileID: 1898246466}
   causesBobAvoid: 0
   myLevel2Panel: {fileID: 1355933015}
@@ -12667,6 +12804,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f90648115aeb1d64389886e500c8f685, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  screenId: 60
+  navigationLayer: 10
   myDockItem: {fileID: 1727609871}
   causesBobAvoid: 1
   myLevel2Panel: {fileID: 382635862}
@@ -13606,7 +13745,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1239632206
 Transform:
   m_ObjectHideFlags: 0
@@ -13927,7 +14066,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1284892566}
   m_Layer: 0
-  m_Name: Pagw_Mirror
+  m_Name: Page_Mirror
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14924,6 +15063,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f90648115aeb1d64389886e500c8f685, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  screenId: 70
+  navigationLayer: 10
   myDockItem: {fileID: 43491421}
   causesBobAvoid: 1
   myLevel2Panel: {fileID: 1163126745}
@@ -15116,7 +15257,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1436687428}
   m_Layer: 5
-  m_Name: Pagge_Seat
+  m_Name: Page_Seat
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -16083,7 +16224,7 @@ GameObject:
   - component: {fileID: 1524738804}
   - component: {fileID: 1524738803}
   m_Layer: 0
-  m_Name: CloudBrain
+  m_Name: System_VoiceCommand
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -16103,7 +16244,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   apiKey: 
   prompt: Bob, Weather, Map, Music, Home, Cancel, Setting
-  saveDebugWav: 1
+  saveDebugWav: 0
   bob: {fileID: 919132147705102362}
   globalDirector: {fileID: 779085252}
   keyboardKey: 20
@@ -17205,6 +17346,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f90648115aeb1d64389886e500c8f685, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  screenId: 80
+  navigationLayer: 10
   myDockItem: {fileID: 941542674}
   causesBobAvoid: 1
   myLevel2Panel: {fileID: 1972756883}
@@ -17967,6 +18110,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f90648115aeb1d64389886e500c8f685, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  screenId: 30
+  navigationLayer: 10
   myDockItem: {fileID: 1927226775}
   causesBobAvoid: 1
   myLevel2Panel: {fileID: 1144865990}
@@ -18778,7 +18923,7 @@ GameObject:
   - component: {fileID: 1777304365}
   - component: {fileID: 1777304364}
   m_Layer: 0
-  m_Name: GlobalMenuManager
+  m_Name: System_LiquidMenu
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20305,7 +20450,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1918522191
 Transform:
   m_ObjectHideFlags: 0
@@ -21727,7 +21872,7 @@ GameObject:
   - component: {fileID: 1976447966}
   - component: {fileID: 1976447967}
   m_Layer: 7
-  m_Name: backbakc
+  m_Name: Backdrop_Background
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

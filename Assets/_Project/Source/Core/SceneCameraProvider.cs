@@ -9,7 +9,7 @@ namespace Bob.SharedMobility
 
         private static bool _warnedMultipleMainCameras;
 
-        public static bool TryGetMainCamera(out Camera camera, Object context = null)
+        public static bool TryGetMainCamera(out Camera camera, UnityEngine.Object context = null)
         {
             if (TryFindNamedActiveCamera(MainCameraName, out camera))
             {
@@ -28,7 +28,7 @@ namespace Bob.SharedMobility
             return false;
         }
 
-        public static bool TryGetUICamera(out Camera camera, Object context = null)
+        public static bool TryGetUICamera(out Camera camera, UnityEngine.Object context = null)
         {
             if (TryFindNamedActiveCamera(UICameraName, out camera))
             {
@@ -56,7 +56,7 @@ namespace Bob.SharedMobility
             return false;
         }
 
-        private static void WarnIfMultipleTaggedMainCameras(Object context)
+        private static void WarnIfMultipleTaggedMainCameras(UnityEngine.Object context)
         {
             if (_warnedMultipleMainCameras) return;
 

@@ -8,6 +8,7 @@ namespace Bob.SharedMobility
     {
         [Header("Navigation")]
         public bool isHomeButton = false;
+        public AppScreenId screenId = AppScreenId.None;
         public DockPanelController myAppController;
         public MapViewController mapController;
 
@@ -113,11 +114,20 @@ namespace Bob.SharedMobility
 
         private void TriggerLogic(CanvasGroup subMenu)
         {
-            if (DockNavigationManager.Instance == null) return;
+            AppNavigationService navigationService = AppNavigationService.Instance;
+            DockNavigationManager dockNavigationManager = DockNavigationManager.Instance;
+
+            if (navigationService == null && dockNavigationManager == null) return;
 
             if (isHomeButton)
             {
-                DockNavigationManager.Instance.CloseCurrentApp();
+                if (navigationService)
+                {
+                    navigationService.OpenHome(mapController);
+                    return;
+                }
+
+                dockNavigationManager.CloseCurrentApp();
 
                 if (mapController)
                 {
@@ -133,7 +143,21 @@ namespace Bob.SharedMobility
 
             if (myAppController)
             {
-                DockNavigationManager.Instance.SwitchToApp(myAppController, subMenu);
+                if (navigationService)
+                {
+                    navigationService.OpenDockPanel(myAppController, subMenu);
+                }
+                else
+                {
+                    dockNavigationManager.SwitchToApp(myAppController, subMenu);
+                }
+
+                return;
+            }
+
+            if (navigationService && screenId != AppScreenId.None)
+            {
+                navigationService.OpenScreen(screenId, subMenu);
             }
         }
 

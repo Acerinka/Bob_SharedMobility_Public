@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 
 namespace Bob.SharedMobility
 {
-    public enum CloudBrainButton
+    public enum VoiceCommandButton
     {
         None,
         ButtonSouth,
@@ -36,7 +36,7 @@ namespace Bob.SharedMobility
 
         [Header("Input")]
         public Key keyboardKey = Key.F;
-        public CloudBrainButton gamepadButton = CloudBrainButton.ButtonSouth;
+        public VoiceCommandButton gamepadButton = VoiceCommandButton.ButtonSouth;
         public float holdDuration = 2.0f;
 
         [Header("Feedback")]
