@@ -1,26 +1,55 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace Bob.SharedMobility
 {
-    public class MapViewModeButton : MonoBehaviour
+    public class MapViewModeButton : MonoBehaviour, IPointerClickHandler
     {
-        [Header("--- 按钮功能设置 ---")]
-        [Tooltip("点击这个按钮，地图应该变成什么状态？")]
+        [Header("Target")]
+        public MapViewController stateController;
         public MapViewController.ViewState targetState;
 
-        [Header("--- 视觉反馈 (可选) ---")]
-        public Transform visualIcon; // 比如按钮上的文字或图标
+        [Header("Optional Visual")]
+        public Transform visualIcon;
 
-        // 当被点击时，这个函数会被 GestureController 调用
+        private void Awake()
+        {
+            ResolveControllerIfNeeded();
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            eventData.Use();
+            OnClick(stateController);
+        }
+
         public void OnClick(MapViewController controller)
         {
-            Debug.Log($"🎯 子按钮被点击: 切换到 {targetState}");
-            
-            // 1. 执行切换
+            if (controller == null)
+            {
+                ResolveControllerIfNeeded();
+                controller = stateController;
+            }
+
+            if (controller == null)
+            {
+                ProjectLog.Warning($"{name} cannot switch map mode because no MapViewController is assigned.", this);
+                return;
+            }
+
             controller.SwitchToState(targetState);
-            
-            // 2. 关闭菜单
             controller.CloseSelectorMenu();
+        }
+
+        private void ResolveControllerIfNeeded()
+        {
+            if (stateController != null) return;
+
+            stateController = GetComponentInParent<MapViewController>();
+            if (stateController == null)
+            {
+                stateController = FindObjectOfType<MapViewController>();
+            }
         }
     }
 }

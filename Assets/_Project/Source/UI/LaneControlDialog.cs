@@ -1,19 +1,17 @@
+using System;
+using DG.Tweening;
 using UnityEngine;
 using UnityEngine.UI;
-using DG.Tweening;
-using System;
-using UnityEngine.InputSystem; 
 
 namespace Bob.SharedMobility
 {
-    // 🔥 定义手柄按键枚举，方便在 Inspector 选择
     public enum MyGamepadButton
     {
         None,
-        ButtonSouth, // Xbox A / PS Cross
-        ButtonEast,  // Xbox B / PS Circle
-        ButtonWest,  // Xbox X / PS Square
-        ButtonNorth, // Xbox Y / PS Triangle
+        ButtonSouth,
+        ButtonEast,
+        ButtonWest,
+        ButtonNorth,
         DpadUp,
         DpadDown,
         DpadLeft,
@@ -24,90 +22,53 @@ namespace Bob.SharedMobility
 
     public class LaneControlDialog : MonoBehaviour
     {
-        [Header("--- 引用 ---")]
-        public CanvasGroup panelGroup; 
-        public Button activateBtn;     
+        [Header("References")]
+        public CanvasGroup panelGroup;
+        public Button activateBtn;
         public Button skipBtn;
 
-        [Header("--- 🎮 手柄按键绑定 ---")]
-        [Tooltip("确认键 (默认填 ButtonSouth)")]
+        [Header("Gamepad")]
         public MyGamepadButton activateInput = MyGamepadButton.ButtonSouth;
-        
-        [Tooltip("取消/跳过键 (默认填 ButtonWest)")]
         public MyGamepadButton skipInput = MyGamepadButton.ButtonWest;
 
-        private Action<bool> _callback; 
+        private Action<bool> _callback;
         private RectTransform _rect;
-        private Vector3 _initialScale; 
+        private Vector3 _initialScale;
 
-        void Awake()
+        private void Awake()
         {
-            if (panelGroup) 
+            if (panelGroup)
             {
                 _rect = panelGroup.GetComponent<RectTransform>();
                 _initialScale = panelGroup.transform.localScale;
             }
         }
 
-        void Start()
+        private void Start()
         {
             if (panelGroup)
             {
-                panelGroup.alpha = 0;
-                if (_rect) _rect.localScale = Vector3.zero; 
+                panelGroup.alpha = 0f;
+                if (_rect) _rect.localScale = Vector3.zero;
                 panelGroup.gameObject.SetActive(false);
             }
 
-            activateBtn.onClick.AddListener(() => OnClick(true));
-            skipBtn.onClick.AddListener(() => OnClick(false));
+            if (activateBtn) activateBtn.onClick.AddListener(() => Choose(true));
+            if (skipBtn) skipBtn.onClick.AddListener(() => Choose(false));
         }
 
-        void Update()
+        private void Update()
         {
-            // 只有弹窗显示时才检测
-            if (panelGroup.gameObject.activeSelf && panelGroup.alpha > 0.5f)
-            {
-                if (Gamepad.current != null)
-                {
-                    // 🔥 动态检测你在 Inspector 里选的键
-                    if (CheckInput(activateInput)) 
-                    {
-                        Debug.Log($"🎮 手柄触发确认: {activateInput}");
-                        OnClick(true);
-                    }
-                    
-                    if (CheckInput(skipInput)) 
-                    {
-                        Debug.Log($"🎮 手柄触发跳过: {skipInput}");
-                        OnClick(false);
-                    }
-                }
+            if (!IsVisible()) return;
 
-                // 键盘调试备份
-                if (Input.GetKeyDown(KeyCode.Return)) OnClick(true);
-                if (Input.GetKeyDown(KeyCode.Escape)) OnClick(false);
+            if (GamepadButtonReader.WasPressedThisFrame(activateInput) || Input.GetKeyDown(KeyCode.Return))
+            {
+                Choose(true);
             }
-        }
 
-        // 🔥 通用按键检测逻辑
-        private bool CheckInput(MyGamepadButton btn)
-        {
-            var gp = Gamepad.current;
-            if (gp == null) return false;
-
-            switch (btn)
+            if (GamepadButtonReader.WasPressedThisFrame(skipInput) || Input.GetKeyDown(KeyCode.Escape))
             {
-                case MyGamepadButton.ButtonSouth: return gp.buttonSouth.wasPressedThisFrame;
-                case MyGamepadButton.ButtonEast: return gp.buttonEast.wasPressedThisFrame;
-                case MyGamepadButton.ButtonWest: return gp.buttonWest.wasPressedThisFrame;
-                case MyGamepadButton.ButtonNorth: return gp.buttonNorth.wasPressedThisFrame;
-                case MyGamepadButton.DpadUp: return gp.dpad.up.wasPressedThisFrame;
-                case MyGamepadButton.DpadDown: return gp.dpad.down.wasPressedThisFrame;
-                case MyGamepadButton.DpadLeft: return gp.dpad.left.wasPressedThisFrame;
-                case MyGamepadButton.DpadRight: return gp.dpad.right.wasPressedThisFrame;
-                case MyGamepadButton.LeftShoulder: return gp.leftShoulder.wasPressedThisFrame;
-                case MyGamepadButton.RightShoulder: return gp.rightShoulder.wasPressedThisFrame;
-                default: return false;
+                Choose(false);
             }
         }
 
@@ -115,36 +76,54 @@ namespace Bob.SharedMobility
         {
             _callback = onChoiceMade;
 
-            if (panelGroup)
-            {
-                panelGroup.gameObject.SetActive(true);
-                panelGroup.blocksRaycasts = true; 
-                panelGroup.alpha = 0;
-                if (_rect) _rect.localScale = Vector3.zero;
+            if (!panelGroup) return;
 
-                panelGroup.DOFade(1, 0.4f);
-                if (_rect) _rect.DOScale(_initialScale, 0.4f).SetEase(Ease.OutBack);
-            }
+            panelGroup.DOKill();
+            if (_rect) _rect.DOKill();
+
+            panelGroup.gameObject.SetActive(true);
+            panelGroup.blocksRaycasts = true;
+            panelGroup.alpha = 0f;
+            if (_rect) _rect.localScale = Vector3.zero;
+
+            panelGroup.DOFade(1f, 0.4f);
+            if (_rect) _rect.DOScale(_initialScale, 0.4f).SetEase(Ease.OutBack);
         }
 
         public void Hide()
         {
-            if (panelGroup)
+            if (!panelGroup) return;
+
+            panelGroup.DOKill();
+            if (_rect) _rect.DOKill();
+
+            panelGroup.blocksRaycasts = false;
+            Tween fadeTween = panelGroup.DOFade(0f, 0.3f);
+
+            if (_rect)
             {
-                panelGroup.blocksRaycasts = false;
-                panelGroup.DOFade(0, 0.3f);
-                if (_rect) 
-                {
-                    _rect.DOScale(Vector3.zero, 0.3f).SetEase(Ease.InBack)
-                         .OnComplete(() => panelGroup.gameObject.SetActive(false));
-                }
+                _rect.DOScale(Vector3.zero, 0.3f)
+                    .SetEase(Ease.InBack)
+                    .OnComplete(() => panelGroup.gameObject.SetActive(false));
+            }
+            else
+            {
+                fadeTween.OnComplete(() => panelGroup.gameObject.SetActive(false));
             }
         }
 
-        void OnClick(bool isActivate)
+        private bool IsVisible()
         {
-            if (_callback != null) _callback(isActivate);
-            Hide(); 
+            return panelGroup != null && panelGroup.gameObject.activeSelf && panelGroup.alpha > 0.5f;
+        }
+
+        private void Choose(bool isActivate)
+        {
+            Action<bool> callback = _callback;
+            _callback = null;
+
+            callback?.Invoke(isActivate);
+            Hide();
         }
     }
 }

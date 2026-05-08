@@ -1,31 +1,39 @@
+using DG.Tweening;
 using UnityEngine;
 using UnityEngine.Events;
-using DG.Tweening;
+using UnityEngine.EventSystems;
 
 namespace Bob.SharedMobility
 {
-    public class LiquidMenuActionButton : MonoBehaviour
+    public class LiquidMenuActionButton : MonoBehaviour, IPointerClickHandler
     {
-        [Header("--- 🖱️ 子按钮配置 ---")]
-        [Tooltip("点击这个区域触发的具体功能")]
+        [Header("Action")]
         public UnityEvent onClick;
 
-        [Tooltip("点击时是否需要简单的缩放反馈？")]
+        [Header("Feedback")]
         public bool enableVisualFeedback = true;
 
-        // 当被 Manager 点击时调用
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            eventData.Use();
+            Trigger();
+        }
+
         public void OnSubButtonClick()
         {
-            // 1. 视觉反馈 (Q弹一下)
+            Trigger();
+        }
+
+        private void Trigger()
+        {
             if (enableVisualFeedback)
             {
                 transform.DOKill();
                 transform.localScale = Vector3.one;
-                transform.DOPunchScale(new Vector3(0.1f, 0.1f, 0), 0.2f);
+                transform.DOPunchScale(new Vector3(0.1f, 0.1f, 0f), 0.2f);
             }
 
-            // 2. 执行事件
-            onClick.Invoke();
+            onClick?.Invoke();
         }
     }
 }

@@ -13335,9 +13335,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 491487d930a853d4781263c72c0f025d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  debugClick: 1
+  debugClick: 0
   autoAssignCamera: 1
   autoDisableBlockingImages: 1
+  ensurePointerRouting: 1
 --- !u!1 &1231919282
 GameObject:
   m_ObjectHideFlags: 0

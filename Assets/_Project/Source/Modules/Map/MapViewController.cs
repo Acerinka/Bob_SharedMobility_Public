@@ -1,71 +1,70 @@
-using UnityEngine;
-using DG.Tweening;
 using System.Collections.Generic;
+using DG.Tweening;
+using UnityEngine;
 
 namespace Bob.SharedMobility
 {
     public class MapViewController : MonoBehaviour
     {
-        public enum ViewState { Small_Icon, Medium_Screen, Full_Screen }
-        public ViewState currentState = ViewState.Small_Icon;
+        public enum ViewState
+        {
+            Small_Icon,
+            Medium_Screen,
+            Full_Screen
+        }
 
         [System.Serializable]
         public struct ViewStateConfig
         {
-            public string stateName; 
+            public string stateName;
             public List<GameObject> objectsToShow;
             public List<GameObject> objectsToHide;
         }
 
-        [Header("--- 🧱 物理碰撞体控制 (修复点击范围) ---")]
-        [Tooltip("请把挂着 MapGestureInputController 的那个物体上的 BoxCollider 拖进来")]
-        public BoxCollider targetCollider; 
-        
-        // 下面这些数值你需要自己在 Inspector 里调，对着 Scene 里的绿框调
+        [Header("State")]
+        public ViewState currentState = ViewState.Small_Icon;
+
+        [Header("Pointer Collider")]
+        [Tooltip("Collider used by MapGestureInputController and EventSystem physics raycasts.")]
+        public BoxCollider targetCollider;
         public Vector3 smallColliderSize = new Vector3(0.2f, 0.2f, 0.1f);
         public Vector3 mediumColliderSize = new Vector3(1.5f, 1.0f, 0.1f);
         public Vector3 fullColliderSize = new Vector3(3.0f, 1.5f, 0.1f);
 
-        [Header("--- 1. 尺寸精细控制 ---")]
-        public Vector3 startScale = Vector3.one; 
-        public float smallIconFixMultiplier = 1.0f; 
-
-        [Space(10)]
+        [Header("Views")]
+        public Vector3 startScale = Vector3.one;
+        public float smallIconFixMultiplier = 1.0f;
         public GameObject viewSmall;
-        
-        [Space(10)]
         public GameObject viewMedium;
         public Vector3 mediumTargetScale = Vector3.one;
-
-        [Space(10)]
         public GameObject viewFull;
         public Vector3 fullTargetScale = Vector3.one;
 
-        [Header("--- 2. 菜单设置 ---")]
-        public LiquidMenuItem selectorMenu; 
+        [Header("Selector")]
+        public LiquidMenuItem selectorMenu;
         public Vector3 selectorTargetScale = Vector3.one;
 
-        [Header("--- 3. 动画参数 ---")]
+        [Header("Animation")]
         public float popDuration = 0.6f;
         public float retractDuration = 0.3f;
         [Range(0, 2)] public float elasticity = 1.0f;
         public Ease openEase = Ease.OutElastic;
         public Ease closeEase = Ease.InBack;
 
-        [Header("--- 4. 环境显隐精细配置 ---")]
+        [Header("Visibility")]
         public ViewStateConfig smallConfig = new ViewStateConfig { stateName = "Small State Config" };
         public ViewStateConfig mediumConfig = new ViewStateConfig { stateName = "Medium State Config" };
         public ViewStateConfig fullConfig = new ViewStateConfig { stateName = "Full State Config" };
 
-        [Header("--- 5. 延迟浮现控制 ---")]
+        [Header("Delayed Icons")]
         public List<GameObject> delayedIcons;
         public float appearDelay = 3.0f;
         public float appearDuration = 1.0f;
 
-        private bool _isTransitioning = false;
+        private bool _isTransitioning;
         private Tween _delayedCallTween;
 
-        void Start()
+        private void Start()
         {
             if (viewSmall) startScale = viewSmall.transform.localScale;
 
@@ -73,34 +72,22 @@ namespace Bob.SharedMobility
             ForceInitView(viewMedium, false, mediumTargetScale);
             ForceInitView(viewFull, false, fullTargetScale);
 
-            if (viewSmall)
-            {
-                var iconCtrl = viewSmall.GetComponent<LiquidIconController>();
-                if (iconCtrl) 
-                {
-                    iconCtrl.ForceUpdateOriginalScale(startScale);
-                    iconCtrl.ResetState();
-                }
-            }
-
-            if (selectorMenu) 
-            {
-                selectorMenu.transform.localScale = Vector3.zero;
-                selectorMenu.gameObject.SetActive(false);
-            }
-
-            foreach (var icon in delayedIcons)
-            {
-                if(icon) { icon.transform.localScale = Vector3.zero; icon.SetActive(false); }
-            }
-
-            // 初始化时也应用一次 Collider 设置
+            ResetIconController(viewSmall, startScale);
+            CloseSelectorMenuInstant();
+            HideDelayedIconsInstant();
             UpdateColliderSize(ViewState.Small_Icon);
             ApplyConfig(smallConfig);
         }
 
-        public void TriggerMediumView() { SwitchToState(ViewState.Medium_Screen); }
-        public void TriggerFullView() { SwitchToState(ViewState.Full_Screen); }
+        public void TriggerMediumView()
+        {
+            SwitchToState(ViewState.Medium_Screen);
+        }
+
+        public void TriggerFullView()
+        {
+            SwitchToState(ViewState.Full_Screen);
+        }
 
         public void SwitchToState(ViewState newState, bool instant = false)
         {
@@ -108,100 +95,276 @@ namespace Bob.SharedMobility
 
             currentState = newState;
             _isTransitioning = true;
-
-            // 🔥 切换状态时，同步修改碰撞体大小
             UpdateColliderSize(newState);
 
-            GameObject targetView = null;
-            Vector3 endScale = Vector3.one;
+            ResolveTargetView(newState, out GameObject targetView, out Vector3 endScale);
 
-            if (newState == ViewState.Medium_Screen) 
-            { 
-                targetView = viewMedium; 
-                endScale = mediumTargetScale; 
-            }
-            else if (newState == ViewState.Full_Screen) 
-            { 
-                targetView = viewFull; 
-                endScale = fullTargetScale; 
-            }
-            else 
-            { 
-                targetView = viewSmall; 
-                endScale = startScale * smallIconFixMultiplier; 
-            }
+            Sequence sequence = DOTween.Sequence();
+            StopViewAnimations();
+            AppendHideCurrentViews(sequence);
+            AppendShowTargetView(sequence, targetView, endScale);
 
-            Sequence seq = DOTween.Sequence();
-
-            if (viewSmall) { viewSmall.transform.DOKill(); viewSmall.GetComponent<LiquidIconController>()?.StopAllAnimations(); }
-            if (viewMedium) { viewMedium.transform.DOKill(); viewMedium.GetComponent<LiquidIconController>()?.StopAllAnimations(); }
-            if (viewFull) { viewFull.transform.DOKill(); viewFull.GetComponent<LiquidIconController>()?.StopAllAnimations(); }
-
-            if (viewSmall && viewSmall.activeSelf) seq.Join(viewSmall.transform.DOScale(Vector3.zero, retractDuration).SetEase(closeEase));
-            if (viewMedium && viewMedium.activeSelf) seq.Join(viewMedium.transform.DOScale(Vector3.zero, retractDuration).SetEase(closeEase));
-            if (viewFull && viewFull.activeSelf) seq.Join(viewFull.transform.DOScale(Vector3.zero, retractDuration).SetEase(closeEase));
-
-            seq.AppendCallback(() => {
-                if(viewSmall) viewSmall.SetActive(false);
-                if(viewMedium) viewMedium.SetActive(false);
-                if(viewFull) viewFull.SetActive(false);
-            });
-
-            seq.AppendCallback(() => {
-                if (targetView)
-                {
-                    var iconCtrl = targetView.GetComponent<LiquidIconController>();
-                    if (iconCtrl) 
-                    {
-                        iconCtrl.ForceUpdateOriginalScale(endScale);
-                        iconCtrl.ResetState();
-                    }
-
-                    targetView.SetActive(true);
-                    targetView.transform.localScale = Vector3.zero;
-                    targetView.transform.DOScale(endScale, popDuration).SetEase(openEase, elasticity);
-                }
-            });
-
-            seq.OnComplete(() => {
+            sequence.OnComplete(() =>
+            {
                 _isTransitioning = false;
-                if (newState == ViewState.Small_Icon) ApplyConfig(smallConfig);
-                else if (newState == ViewState.Medium_Screen) ApplyConfig(mediumConfig);
-                else if (newState == ViewState.Full_Screen) ApplyConfig(fullConfig);
-                HandleDelayedIcons(newState); 
+                ApplyConfigForState(newState);
+                HandleDelayedIcons(newState);
             });
         }
 
-        // 🔥 新增：修改碰撞体大小的逻辑
-        void UpdateColliderSize(ViewState state)
+        public void CycleNext()
+        {
+            if (currentState == ViewState.Small_Icon)
+            {
+                SwitchToState(ViewState.Medium_Screen);
+            }
+            else if (currentState == ViewState.Medium_Screen)
+            {
+                SwitchToState(ViewState.Full_Screen);
+            }
+            else if (viewFull)
+            {
+                viewFull.transform.DOKill(true);
+                viewFull.transform.DOPunchRotation(new Vector3(0f, 0f, 2f), 0.3f, 10, 1f);
+            }
+        }
+
+        public void CyclePrev()
+        {
+            if (currentState == ViewState.Full_Screen)
+            {
+                SwitchToState(ViewState.Medium_Screen);
+                return;
+            }
+
+            SwitchToState(ViewState.Small_Icon);
+        }
+
+        public void OpenSelectorMenu()
+        {
+            if (!selectorMenu) return;
+
+            selectorMenu.gameObject.SetActive(true);
+            selectorMenu.transform.DOKill();
+            selectorMenu.transform.localScale = Vector3.zero;
+            selectorMenu.transform.DOScale(selectorTargetScale, popDuration).SetEase(openEase, elasticity);
+            selectorMenu.OpenChildren();
+        }
+
+        public void CloseSelectorMenu()
+        {
+            if (!selectorMenu || !selectorMenu.gameObject.activeSelf) return;
+
+            selectorMenu.transform.DOKill();
+            selectorMenu.transform
+                .DOScale(Vector3.zero, 0.2f)
+                .OnComplete(() => selectorMenu.gameObject.SetActive(false));
+        }
+
+        private void ResolveTargetView(ViewState state, out GameObject targetView, out Vector3 targetScale)
+        {
+            switch (state)
+            {
+                case ViewState.Medium_Screen:
+                    targetView = viewMedium;
+                    targetScale = mediumTargetScale;
+                    break;
+                case ViewState.Full_Screen:
+                    targetView = viewFull;
+                    targetScale = fullTargetScale;
+                    break;
+                default:
+                    targetView = viewSmall;
+                    targetScale = startScale * smallIconFixMultiplier;
+                    break;
+            }
+        }
+
+        private void StopViewAnimations()
+        {
+            StopViewAnimation(viewSmall);
+            StopViewAnimation(viewMedium);
+            StopViewAnimation(viewFull);
+        }
+
+        private static void StopViewAnimation(GameObject view)
+        {
+            if (!view) return;
+
+            view.transform.DOKill();
+            view.GetComponent<LiquidIconController>()?.StopAllAnimations();
+        }
+
+        private void AppendHideCurrentViews(Sequence sequence)
+        {
+            AppendHideView(sequence, viewSmall);
+            AppendHideView(sequence, viewMedium);
+            AppendHideView(sequence, viewFull);
+
+            sequence.AppendCallback(() =>
+            {
+                if (viewSmall) viewSmall.SetActive(false);
+                if (viewMedium) viewMedium.SetActive(false);
+                if (viewFull) viewFull.SetActive(false);
+            });
+        }
+
+        private void AppendHideView(Sequence sequence, GameObject view)
+        {
+            if (view && view.activeSelf)
+            {
+                sequence.Join(view.transform.DOScale(Vector3.zero, retractDuration).SetEase(closeEase));
+            }
+        }
+
+        private void AppendShowTargetView(Sequence sequence, GameObject targetView, Vector3 targetScale)
+        {
+            sequence.AppendCallback(() =>
+            {
+                if (!targetView) return;
+
+                ResetIconController(targetView, targetScale);
+                targetView.SetActive(true);
+                targetView.transform.localScale = Vector3.zero;
+                targetView.transform.DOScale(targetScale, popDuration).SetEase(openEase, elasticity);
+            });
+        }
+
+        private static void ResetIconController(GameObject view, Vector3 scale)
+        {
+            if (!view) return;
+
+            LiquidIconController iconController = view.GetComponent<LiquidIconController>();
+            if (!iconController) return;
+
+            iconController.ForceUpdateOriginalScale(scale);
+            iconController.ResetState();
+        }
+
+        private void UpdateColliderSize(ViewState state)
         {
             if (targetCollider == null) return;
 
-            Vector3 finalSize = smallColliderSize;
             switch (state)
             {
-                case ViewState.Small_Icon: finalSize = smallColliderSize; break;
-                case ViewState.Medium_Screen: finalSize = mediumColliderSize; break;
-                case ViewState.Full_Screen: finalSize = fullColliderSize; break;
+                case ViewState.Medium_Screen:
+                    targetCollider.size = mediumColliderSize;
+                    break;
+                case ViewState.Full_Screen:
+                    targetCollider.size = fullColliderSize;
+                    break;
+                default:
+                    targetCollider.size = smallColliderSize;
+                    break;
+            }
+        }
+
+        private void ApplyConfigForState(ViewState state)
+        {
+            switch (state)
+            {
+                case ViewState.Medium_Screen:
+                    ApplyConfig(mediumConfig);
+                    break;
+                case ViewState.Full_Screen:
+                    ApplyConfig(fullConfig);
+                    break;
+                default:
+                    ApplyConfig(smallConfig);
+                    break;
+            }
+        }
+
+        private static void ApplyConfig(ViewStateConfig config)
+        {
+            SetObjectsActive(config.objectsToHide, false);
+            SetObjectsActive(config.objectsToShow, true);
+        }
+
+        private static void SetObjectsActive(List<GameObject> objects, bool isActive)
+        {
+            if (objects == null) return;
+
+            foreach (GameObject target in objects)
+            {
+                if (target) target.SetActive(isActive);
+            }
+        }
+
+        private void HandleDelayedIcons(ViewState newState)
+        {
+            _delayedCallTween?.Kill();
+
+            if (newState == ViewState.Small_Icon)
+            {
+                HideDelayedIconsAnimated();
+                return;
             }
 
-            // 可以加一个动画让它平滑变化，或者直接变
-            // 这里直接变，反应最快
-            targetCollider.size = finalSize;
+            _delayedCallTween = DOVirtual.DelayedCall(appearDelay, ShowDelayedIcons);
         }
 
-        // 辅助方法... (保持不变)
-        public void CycleNext()
+        private void ShowDelayedIcons()
         {
-            if (currentState == ViewState.Small_Icon) SwitchToState(ViewState.Medium_Screen);
-            else if (currentState == ViewState.Medium_Screen) SwitchToState(ViewState.Full_Screen);
-            else if (currentState == ViewState.Full_Screen) { if (viewFull) { viewFull.transform.DOKill(true); viewFull.transform.DOPunchRotation(new Vector3(0, 0, 2f), 0.3f, 10, 1); } }
+            if (delayedIcons == null) return;
+
+            foreach (GameObject icon in delayedIcons)
+            {
+                if (!icon) continue;
+
+                icon.SetActive(true);
+                icon.transform.localScale = Vector3.zero;
+                icon.transform.DOScale(Vector3.one, appearDuration).SetEase(Ease.OutSine);
+            }
         }
-        public void CyclePrev() { if (currentState == ViewState.Full_Screen) SwitchToState(ViewState.Medium_Screen); else SwitchToState(ViewState.Small_Icon); }
-        public void OpenSelectorMenu() { if(selectorMenu) { selectorMenu.gameObject.SetActive(true); selectorMenu.transform.DOKill(); selectorMenu.transform.localScale = Vector3.zero; selectorMenu.transform.DOScale(selectorTargetScale, popDuration).SetEase(openEase, elasticity); selectorMenu.OpenChildren(); } }
-        public void CloseSelectorMenu() { if(selectorMenu && selectorMenu.gameObject.activeSelf) { selectorMenu.transform.DOKill(); selectorMenu.transform.DOScale(Vector3.zero, 0.2f).OnComplete(() => selectorMenu.gameObject.SetActive(false)); } }
-        void ApplyConfig(ViewStateConfig config) { foreach (var obj in config.objectsToHide) if (obj) obj.SetActive(false); foreach (var obj in config.objectsToShow) if (obj) obj.SetActive(true); }
-        void HandleDelayedIcons(ViewState newState) { if (_delayedCallTween != null) _delayedCallTween.Kill(); if (newState == ViewState.Small_Icon) { foreach (var icon in delayedIcons) { if (icon) { icon.transform.DOKill(); icon.transform.DOScale(Vector3.zero, 0.3f).OnComplete(() => icon.SetActive(false)); } } } else { _delayedCallTween = DOVirtual.DelayedCall(appearDelay, () => { foreach (var icon in delayedIcons) { if (icon) { icon.SetActive(true); icon.transform.localScale = Vector3.zero; icon.transform.DOScale(Vector3.one, appearDuration).SetEase(Ease.OutSine); } } }); } }
-        void ForceInitView(GameObject view, bool active, Vector3 scale) { if(!view) return; view.SetActive(active); view.transform.localScale = active ? scale : Vector3.zero; if(active) { var ic = view.GetComponent<LiquidIconController>(); if(ic) { ic.ForceUpdateOriginalScale(scale); ic.ResetState(); } } }
+
+        private void HideDelayedIconsAnimated()
+        {
+            if (delayedIcons == null) return;
+
+            foreach (GameObject icon in delayedIcons)
+            {
+                if (!icon) continue;
+
+                icon.transform.DOKill();
+                icon.transform
+                    .DOScale(Vector3.zero, 0.3f)
+                    .OnComplete(() => icon.SetActive(false));
+            }
+        }
+
+        private void HideDelayedIconsInstant()
+        {
+            if (delayedIcons == null) return;
+
+            foreach (GameObject icon in delayedIcons)
+            {
+                if (!icon) continue;
+
+                icon.transform.localScale = Vector3.zero;
+                icon.SetActive(false);
+            }
+        }
+
+        private void CloseSelectorMenuInstant()
+        {
+            if (!selectorMenu) return;
+
+            selectorMenu.transform.localScale = Vector3.zero;
+            selectorMenu.gameObject.SetActive(false);
+        }
+
+        private static void ForceInitView(GameObject view, bool active, Vector3 scale)
+        {
+            if (!view) return;
+
+            view.SetActive(active);
+            view.transform.localScale = active ? scale : Vector3.zero;
+
+            if (active)
+            {
+                ResetIconController(view, scale);
+            }
+        }
     }
 }

@@ -2,49 +2,48 @@ using UnityEngine;
 using DG.Tweening;
 using System.Collections.Generic;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 
 namespace Bob.SharedMobility
 {
     [DefaultExecutionOrder(-100)] 
-    public class LiquidMenuItem : MonoBehaviour
+    public class LiquidMenuItem : MonoBehaviour, IPointerClickHandler
     {
-        [Header("--- 🌳 家族树结构 ---")]
+        [Header("Hierarchy")]
         public LiquidMenuItem parentItem;
         public List<LiquidMenuItem> childItems;
         public bool isRoot = false;
 
-        [Header("--- ⚡ 自动化控制 ---")]
+        [Header("Startup")]
         public bool autoExpandOnStart = false;
 
-        [Header("--- 📐 尺寸修正 ---")]
-        [Tooltip("🔥【出生大小修正】: 图标弹出来时要是多大？填 1.2 表示一出来就是 1.2 倍")]
+        [Header("Scale")]
+        [Tooltip("Multiplier applied to the item when it is spawned.")]
         public float spawnScaleMultiplier = 1.0f; 
 
-        [Tooltip("🔥【激活大小倍率】: 点击展开时，基于【出生大小】再变大多少？填 1.0 表示不变")]
+        [Tooltip("Multiplier applied on top of the spawn scale while the item is active.")]
         public float activeScaleMultiplier = 1.0f; 
 
-        [Header("--- 🎨 动画参数 ---")]
+        [Header("Animation")]
         public float popDuration = 0.6f;     
         public float retractDuration = 0.2f; 
         [Range(0, 2)] public float elasticity = 1.0f; 
         public float staggerDelay = 0.05f;   
 
-        [Header("--- 👁️ 显隐控制 ---")]
+        [Header("Visibility")]
         public bool autoHideSiblings = true;
         public List<GameObject> customObjectsToHide;
         public List<GameObject> customObjectsToShow;
 
-        [Header("--- ⚡ 事件触发 ---")]
+        [Header("Events")]
         public UnityEvent onActionTriggered;
 
-        // --- 内部状态 ---
         private Vector3 _initLocalPos; 
         private Vector3 _initScale;    
         private bool _isOpen = false; 
 
         public bool IsOpen => _isOpen;
 
-        // 🔥🔥【修复点】：这里改成 public，让外部控制器可以读取它！
         public Vector3 TargetSpawnScale => _initScale * spawnScaleMultiplier;
 
         void Awake()
@@ -67,36 +66,39 @@ namespace Bob.SharedMobility
             }
         }
 
-        // ========================================================================
-        // 🖱️ 交互入口
-        // ========================================================================
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            eventData.Use();
+            OnClick();
+        }
+
         public void OnClick()
         {
-            LiquidMenuManager.Instance.SetCurrentFocus(this);
+            if (LiquidMenuManager.Instance)
+            {
+                LiquidMenuManager.Instance.HandleItemSelected(this);
+            }
 
-            if (childItems.Count > 0)
+            if (childItems != null && childItems.Count > 0)
             {
                 if (!_isOpen) OpenChildren();
             }
             else
             {
-                Debug.Log($"⚡ 触发功能事件: {name}");
+                ProjectLog.Info($"Triggered liquid menu action: {name}", this);
                 if (!_isOpen)
                 {
                     _isOpen = true; 
                     transform.DOScale(TargetSpawnScale * activeScaleMultiplier, 0.2f);
                     ProcessVisibility(true);
                 }
-                onActionTriggered.Invoke(); 
+                onActionTriggered?.Invoke(); 
             }
         }
 
-        // ========================================================================
-        // 🌊 展开逻辑 (Open)
-        // ========================================================================
         public void OpenChildren()
         {
-            if (_isOpen) return;
+            if (_isOpen || childItems == null || childItems.Count == 0) return;
             _isOpen = true;
             
             if (Mathf.Abs(activeScaleMultiplier - 1.0f) > 0.001f)
@@ -109,6 +111,8 @@ namespace Bob.SharedMobility
             for (int i = 0; i < childItems.Count; i++)
             {
                 var child = childItems[i];
+                if (child == null) continue;
+
                 child.gameObject.SetActive(true);
                 
                 child.transform.position = this.transform.position; 
@@ -132,38 +136,37 @@ namespace Bob.SharedMobility
             }
         }
 
-        // ========================================================================
-        // 🔙 收起逻辑 (Close)
-        // ========================================================================
         public void CloseChildren()
         {
             if (!_isOpen) return;
             _isOpen = false;
 
-            foreach (var child in childItems)
+            if (childItems != null)
             {
-                if (child.IsOpen) child.CloseChildren(); 
-                child.HideAnimate(this.transform.position); 
+                foreach (var child in childItems)
+                {
+                    if (child == null) continue;
+
+                    if (child.IsOpen) child.CloseChildren(); 
+                    child.HideAnimate(this.transform.position); 
+                }
             }
 
             transform.DOScale(TargetSpawnScale, retractDuration);
 
             ProcessVisibility(false);
 
-            if (parentItem != null)
-                LiquidMenuManager.Instance.SetCurrentFocus(parentItem);
-            else
-                LiquidMenuManager.Instance.SetCurrentFocus(null);
+            if (LiquidMenuManager.Instance)
+            {
+                LiquidMenuManager.Instance.SetCurrentFocus(parentItem != null ? parentItem : null);
+            }
         }
 
-        // ========================================================================
-        // 👁️ 显隐核心
-        // ========================================================================
         private void ProcessVisibility(bool isOpening)
         {
             if (autoHideSiblings)
             {
-                if (parentItem != null)
+                if (parentItem != null && parentItem.childItems != null)
                 {
                     foreach (var sibling in parentItem.childItems)
                     {
@@ -176,7 +179,7 @@ namespace Bob.SharedMobility
                         }
                     }
                 }
-                else if (isRoot)
+                else if (isRoot && LiquidMenuManager.Instance)
                 {
                     if (isOpening) LiquidMenuManager.Instance.HideOtherRoots(this);
                     else LiquidMenuManager.Instance.ShowAllRoots();
@@ -201,8 +204,6 @@ namespace Bob.SharedMobility
                 }
             }
         }
-
-        // --- 动画封装 ---
 
         public void ShowAnimate(float delay, float duration, float elastic)
         {

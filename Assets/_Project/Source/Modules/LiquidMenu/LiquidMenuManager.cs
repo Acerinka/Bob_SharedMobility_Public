@@ -1,86 +1,84 @@
-using UnityEngine;
 using System.Collections.Generic;
-using UnityEngine.EventSystems; // 🔥 1. 必须引用这个命名空间
+using UnityEngine;
 
 namespace Bob.SharedMobility
 {
     public class LiquidMenuManager : MonoBehaviour
     {
-        public static LiquidMenuManager Instance;
+        public static LiquidMenuManager Instance { get; private set; }
 
-        [Header("--- 顶级菜单 ---")]
-        public List<LiquidMenuItem> rootItems;
+        [Header("Root Items")]
+        public List<LiquidMenuItem> rootItems = new List<LiquidMenuItem>();
+
+        [Header("Pointer Routing")]
+        [SerializeField] private bool ensurePointerRouting = true;
 
         private LiquidMenuItem _currentFocus;
 
-        void Awake() => Instance = this;
-
-        void Update()
+        private void Awake()
         {
-            if (Input.GetMouseButtonDown(0))
+            if (Instance != null && Instance != this)
             {
-                // 🔥🔥【核心修复】UI 防穿透盾牌 🔥🔥
-                // 意思就是：如果鼠标正指着 UI (Home键、菜单面板等)，
-                // 直接 Return (退出)，不要执行下面的 3D 射线检测！
-                if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-                {
-                    return; 
-                }
+                ProjectLog.Warning("Multiple LiquidMenuManager instances detected; the latest instance will be used.", this);
+            }
 
-                Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-                
-                // 使用 RaycastAll 可以穿透检测，但这里简单的 Raycast 配合 Layer 也可以
-                if (Physics.Raycast(ray, out RaycastHit hit))
-                {
-                    // 🔥 【新逻辑】: 优先检查是否点到了“子按钮” (Hotspot)
-                    var subButton = hit.transform.GetComponent<LiquidMenuActionButton>();
-                    if (subButton != null)
-                    {
-                        subButton.OnSubButtonClick();
-                        return; // 命中了子按钮，直接结束，不往下传
-                    }
+            Instance = this;
 
-                    // 🔥 【旧逻辑】: 检查是否点到了“主菜单图标”
-                    var item = hit.transform.GetComponent<LiquidMenuItem>(); 
-                    // 或者 item = hit.transform.GetComponentInParent<LiquidMenuItem>();
-                    
-                    if (item != null)
-                    {
-                        // 逻辑修复：切换根节点分支
-                        if (item.isRoot && _currentFocus != null && _currentFocus != item && !_currentFocus.transform.IsChildOf(item.transform))
-                        {
-                             _currentFocus.CloseChildren(); 
-                        }
-                        
-                        item.OnClick(); 
-                        return; 
-                    }
-                }
-
-                // 3. 点到了空白处 -> 返回上一级
-                if (_currentFocus != null)
-                {
-                    _currentFocus.CloseChildren();
-                }
+            if (ensurePointerRouting)
+            {
+                ScenePointerRouting.Ensure();
             }
         }
 
-        public void SetCurrentFocus(LiquidMenuItem item) => _currentFocus = item;
+        public void HandleItemSelected(LiquidMenuItem item)
+        {
+            if (item == null) return;
+
+            bool switchingRoot = item.isRoot
+                && _currentFocus != null
+                && _currentFocus != item
+                && !_currentFocus.transform.IsChildOf(item.transform);
+
+            if (switchingRoot)
+            {
+                _currentFocus.CloseChildren();
+            }
+
+            _currentFocus = item;
+        }
+
+        public void SetCurrentFocus(LiquidMenuItem item)
+        {
+            _currentFocus = item;
+        }
+
+        public void DismissCurrentFocus()
+        {
+            if (_currentFocus != null)
+            {
+                _currentFocus.CloseChildren();
+            }
+        }
 
         public void HideOtherRoots(LiquidMenuItem activeRoot)
         {
-            foreach (var root in rootItems)
+            foreach (LiquidMenuItem root in rootItems)
             {
-                if (root != activeRoot) root.HideAnimate();
+                if (root != null && root != activeRoot)
+                {
+                    root.HideAnimate();
+                }
             }
         }
 
         public void ShowAllRoots()
         {
-            foreach (var root in rootItems)
+            foreach (LiquidMenuItem root in rootItems)
             {
-                if (!root.gameObject.activeSelf) 
+                if (root != null && !root.gameObject.activeSelf)
+                {
                     root.ShowAnimate(0, 0.5f, 1f);
+                }
             }
         }
     }

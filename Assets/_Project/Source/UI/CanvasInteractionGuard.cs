@@ -1,56 +1,119 @@
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.EventSystems;
 using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace Bob.SharedMobility
 {
-    // 🔥 挂载在这个脚本所在的 Canvas 上
+    [DisallowMultipleComponent]
     public class CanvasInteractionGuard : MonoBehaviour
     {
-        [Header("--- 调试 ---")]
-        [Tooltip("勾选后，点击鼠标会打印出你到底点到了谁")]
-        public bool debugClick = true;
+        [Header("Diagnostics")]
+        public bool debugClick = false;
 
-        [Header("--- 自动修复 ---")]
-        [Tooltip("勾选后，Start时会自动把 MainCamera 塞给 Canvas")]
+        [Header("Bootstrap")]
         public bool autoAssignCamera = true;
-        
-        [Tooltip("勾选后，Start时会自动把所有【非按钮】图片的射线检测关掉，防止遮挡")]
         public bool autoDisableBlockingImages = true;
+        [SerializeField] private bool ensurePointerRouting = true;
 
-        void Start()
+        private void Awake()
         {
-            // 1. 修复相机丢失问题
-            if (autoAssignCamera)
+            if (ensurePointerRouting)
             {
-                Canvas canvas = GetComponent<Canvas>();
-                if (canvas.renderMode == RenderMode.WorldSpace && canvas.worldCamera == null)
-                {
-                    canvas.worldCamera = Camera.main;
-                    Debug.Log("🔧 [UI修复] 已强制将 MainCamera 赋给 Canvas！");
-                }
+                ScenePointerRouting.Ensure();
             }
+        }
 
-            // 2. 修复遮挡问题 (暴力清理)
+        private void Start()
+        {
+            AssignWorldCameraIfNeeded();
+
             if (autoDisableBlockingImages)
             {
                 FixRaycastTargets();
             }
         }
 
-        void Update()
+        private void Update()
         {
-            // 3. 实时调试：到底点到了谁？
             if (debugClick && Input.GetMouseButtonDown(0))
             {
-                CheckWhatIsClicked();
+                LogPointerRaycastStack();
             }
         }
 
-        // 🔥 核心功能：看看谁挡住了射线
-        void CheckWhatIsClicked()
+        public void FixRaycastTargets()
         {
+            int disabledImageCount = 0;
+            Image[] images = GetComponentsInChildren<Image>(true);
+            foreach (Image image in images)
+            {
+                bool belongsToSelectable = image.GetComponentInParent<Selectable>() != null;
+                bool hasPointerHandler = HasPointerHandler(image.gameObject);
+                bool shouldReceiveRaycasts = belongsToSelectable || hasPointerHandler;
+
+                if (image.raycastTarget != shouldReceiveRaycasts)
+                {
+                    if (!shouldReceiveRaycasts)
+                    {
+                        disabledImageCount++;
+                    }
+
+                    image.raycastTarget = shouldReceiveRaycasts;
+                }
+            }
+
+            Text[] texts = GetComponentsInChildren<Text>(true);
+            foreach (Text text in texts)
+            {
+                if (text.GetComponentInParent<Selectable>() != null)
+                {
+                    text.raycastTarget = false;
+                }
+            }
+
+            if (disabledImageCount > 0)
+            {
+                ProjectLog.Info($"Disabled {disabledImageCount} decorative Image raycast targets on {name}.", this);
+            }
+        }
+
+        private static bool HasPointerHandler(GameObject target)
+        {
+            return ExecuteEvents.GetEventHandler<IPointerClickHandler>(target) != null
+                || ExecuteEvents.GetEventHandler<IPointerDownHandler>(target) != null
+                || ExecuteEvents.GetEventHandler<IPointerUpHandler>(target) != null
+                || ExecuteEvents.GetEventHandler<IBeginDragHandler>(target) != null
+                || ExecuteEvents.GetEventHandler<IDragHandler>(target) != null
+                || ExecuteEvents.GetEventHandler<IEndDragHandler>(target) != null;
+        }
+
+        private void AssignWorldCameraIfNeeded()
+        {
+            if (!autoAssignCamera) return;
+
+            Canvas canvas = GetComponent<Canvas>();
+            if (canvas == null
+                || canvas.renderMode != RenderMode.WorldSpace
+                || canvas.worldCamera != null)
+            {
+                return;
+            }
+
+            if (SceneCameraProvider.TryGetUICamera(out Camera uiCamera, this))
+            {
+                canvas.worldCamera = uiCamera;
+            }
+        }
+
+        private void LogPointerRaycastStack()
+        {
+            if (EventSystem.current == null)
+            {
+                ProjectLog.Warning("Cannot inspect pointer raycasts because no EventSystem is active.", this);
+                return;
+            }
+
             PointerEventData pointerData = new PointerEventData(EventSystem.current)
             {
                 position = Input.mousePosition
@@ -59,64 +122,18 @@ namespace Bob.SharedMobility
             List<RaycastResult> results = new List<RaycastResult>();
             EventSystem.current.RaycastAll(pointerData, results);
 
-            if (results.Count > 0)
+            if (results.Count == 0)
             {
-                Debug.Log($"👇 --- 鼠标点击位置检测到 {results.Count} 个UI物体 ---");
-                foreach (var result in results)
-                {
-                    string status = result.gameObject.GetComponent<Button>() ? "✅ [按钮]" : "❌ [挡路物体]";
-                    Debug.Log($"{status} 层级: {result.depth} | 物体名: <color=yellow>{result.gameObject.name}</color>");
-                }
-            }
-            else
-            {
-                Debug.Log("👇 鼠标点击位置没有检测到任何 UI (可能没有 Event Camera 或离得太远)");
-            }
-        }
-
-        // 🔥 暴力修复：只保留按钮的射线，其他全关掉
-        public void FixRaycastTargets()
-        {
-            // 获取所有 Image
-            Image[] allImages = GetComponentsInChildren<Image>(true);
-            int fixedCount = 0;
-
-            foreach (var img in allImages)
-            {
-                // 如果这个 Image 身上没有 Button 组件，且它的父物体也没有 Button 组件
-                if (img.GetComponent<Button>() == null && img.GetComponentInParent<Button>() == null)
-                {
-                    // 如果它原本是开着的，我们就把它关了
-                    if (img.raycastTarget)
-                    {
-                        img.raycastTarget = false;
-                        fixedCount++;
-                    }
-                }
-                else
-                {
-                    // 如果它是按钮的一部分，必须开启
-                    if (!img.raycastTarget)
-                    {
-                        img.raycastTarget = true;
-                        // Debug.Log($"🔧 修正：开启了按钮 {img.name} 的射线检测");
-                    }
-                }
-            }
-            
-            // 处理 Text (文字有时也会挡住按钮)
-            // TMPro.TextMeshProUGUI[] allTexts = GetComponentsInChildren<TMPro.TextMeshProUGUI>(true);
-            // 如果你用的是普通 Text
-            Text[] allTexts = GetComponentsInChildren<Text>(true);
-            foreach(var t in allTexts)
-            {
-                 if (t.GetComponentInParent<Button>() != null)
-                 {
-                     t.raycastTarget = false; // 按钮里的文字通常不需要阻挡射线，让按钮自己处理
-                 }
+                ProjectLog.Info("Pointer raycast stack is empty.", this);
+                return;
             }
 
-            Debug.Log($"🧹 [UI修复] 已自动关闭 {fixedCount} 个背景图片的 RaycastTarget，防止遮挡。");
+            for (int i = 0; i < results.Count; i++)
+            {
+                RaycastResult result = results[i];
+                string selectableMark = result.gameObject.GetComponentInParent<Selectable>() ? "Selectable" : "Blocking";
+                ProjectLog.Info($"Pointer hit {i}: {selectableMark} | depth {result.depth} | {result.gameObject.name}", result.gameObject);
+            }
         }
     }
 }
