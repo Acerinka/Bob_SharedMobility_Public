@@ -48,7 +48,7 @@ namespace Bob.SharedMobility
             stateController = GetComponentInParent<MapViewController>();
             if (stateController == null)
             {
-                stateController = FindObjectOfType<MapViewController>();
+                stateController = MapViewController.ActiveInstance;
             }
         }
     }

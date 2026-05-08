@@ -1,71 +1,62 @@
+using TMPro;
 using UnityEngine;
-using TMPro; // 如果你用的是 TextMeshPro，必须引用这个
-using UnityEngine.UI;
 
 namespace Bob.SharedMobility
 {
     public class ClimateControlPanel : MonoBehaviour
     {
-        [Header("--- 🌡️ 温度显示 ---")]
-        public TMP_Text leftTempText;  // 左边温度文字 (如果是旧版Text组件，就把 TMP_Text 改成 Text)
-        public TMP_Text rightTempText; // 右边温度文字
+        [Header("Temperature Labels")]
+        public TMP_Text leftTempText;
+        public TMP_Text rightTempText;
 
-        [Header("--- ⚙️ 参数 ---")]
-        public int minTemp = 16; // 最低温
-        public int maxTemp = 30; // 最高温
+        [Header("Temperature Range")]
+        public int minTemp = 16;
+        public int maxTemp = 30;
 
-        // 内部记录当前的温度值
         private int _currentLeft = 24;
         private int _currentRight = 24;
 
-        void Start()
+        private void Start()
         {
             UpdateUI();
         }
 
-        // --- 🔘 左边控制 ---
         public void IncreaseLeft()
         {
-            if (_currentLeft < maxTemp)
-            {
-                _currentLeft++;
-                UpdateUI();
-            }
+            SetLeftTemperature(_currentLeft + 1);
         }
 
         public void DecreaseLeft()
         {
-            if (_currentLeft > minTemp)
-            {
-                _currentLeft--;
-                UpdateUI();
-            }
+            SetLeftTemperature(_currentLeft - 1);
         }
 
-        // --- 🔘 右边控制 ---
         public void IncreaseRight()
         {
-            if (_currentRight < maxTemp)
-            {
-                _currentRight++;
-                UpdateUI();
-            }
+            SetRightTemperature(_currentRight + 1);
         }
 
         public void DecreaseRight()
         {
-            if (_currentRight > minTemp)
-            {
-                _currentRight--;
-                UpdateUI();
-            }
+            SetRightTemperature(_currentRight - 1);
         }
 
-        // 更新文字显示
-        void UpdateUI()
+        private void SetLeftTemperature(int value)
         {
-            if(leftTempText) leftTempText.text = _currentLeft.ToString();
-            if(rightTempText) rightTempText.text = _currentRight.ToString();
+            _currentLeft = Mathf.Clamp(value, minTemp, maxTemp);
+            UpdateUI();
+        }
+
+        private void SetRightTemperature(int value)
+        {
+            _currentRight = Mathf.Clamp(value, minTemp, maxTemp);
+            UpdateUI();
+        }
+
+        private void UpdateUI()
+        {
+            if (leftTempText) leftTempText.text = _currentLeft.ToString();
+            if (rightTempText) rightTempText.text = _currentRight.ToString();
         }
     }
 }

@@ -5,29 +5,45 @@ namespace Bob.SharedMobility
 {
     public class AudioVolumeController : MonoBehaviour
     {
-        [Header("--- 🎚️ 组件引用 ---")]
+        [Header("References")]
         public Slider volumeSlider;
 
-        [Header("--- ⚙️ 参数设置 ---")]
-        public float stepAmount = 0.1f; // 每次按按钮增加多少 (0.1 = 10%)
+        [Header("Settings")]
+        public float stepAmount = 0.1f;
 
-        // 当 Slider 值改变时调用 (可以在这里连接真实的系统音量)
-        public void OnSliderValueChanged(float value)
+        private void Awake()
         {
-            // 比如: AudioListener.volume = value;
-            Debug.Log($"当前音量: {value * 100}%");
+            if (volumeSlider)
+            {
+                volumeSlider.SetValueWithoutNotify(AudioListener.volume);
+                volumeSlider.onValueChanged.AddListener(OnSliderValueChanged);
+            }
         }
 
-        // --- 🔘 按钮功能 ---
+        public void OnSliderValueChanged(float value)
+        {
+            AudioListener.volume = Mathf.Clamp01(value);
+        }
 
         public void IncreaseVolume()
         {
-            if (volumeSlider) volumeSlider.value += stepAmount;
+            SetVolume(AudioListener.volume + stepAmount);
         }
 
         public void DecreaseVolume()
         {
-            if (volumeSlider) volumeSlider.value -= stepAmount;
+            SetVolume(AudioListener.volume - stepAmount);
+        }
+
+        private void SetVolume(float value)
+        {
+            float clampedValue = Mathf.Clamp01(value);
+            AudioListener.volume = clampedValue;
+
+            if (volumeSlider)
+            {
+                volumeSlider.SetValueWithoutNotify(clampedValue);
+            }
         }
     }
 }

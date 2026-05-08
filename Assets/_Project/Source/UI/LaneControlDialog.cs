@@ -61,12 +61,12 @@ namespace Bob.SharedMobility
         {
             if (!IsVisible()) return;
 
-            if (GamepadButtonReader.WasPressedThisFrame(activateInput) || Input.GetKeyDown(KeyCode.Return))
+            if (GamepadButtonReader.WasPressedThisFrame(activateInput) || ProjectInput.WasKeyPressed(KeyCode.Return))
             {
                 Choose(true);
             }
 
-            if (GamepadButtonReader.WasPressedThisFrame(skipInput) || Input.GetKeyDown(KeyCode.Escape))
+            if (GamepadButtonReader.WasPressedThisFrame(skipInput) || ProjectInput.WasKeyPressed(KeyCode.Escape))
             {
                 Choose(false);
             }

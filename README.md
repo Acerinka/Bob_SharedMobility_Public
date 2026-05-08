@@ -35,3 +35,7 @@ Open:
 ## Naming Rules
 
 See `docs/ASSET_NAMING.md`.
+
+## Engineering Standards
+
+See `docs/ENGINEERING_STANDARDS.md`.

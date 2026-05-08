@@ -46,7 +46,7 @@ namespace Bob.SharedMobility
                 return;
             }
 
-            bool keyboardHit = Input.GetKeyDown(triggerKey);
+            bool keyboardHit = ProjectInput.WasKeyPressed(triggerKey);
             bool gamepadHit = GamepadButtonReader.WasPressedThisFrame(triggerGamepadBtn);
 
             if (keyboardHit || gamepadHit)

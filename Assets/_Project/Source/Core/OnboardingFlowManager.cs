@@ -1,311 +1,311 @@
-using UnityEngine;
-using UnityEngine.UI;
-using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.InputSystem; 
+using DG.Tweening;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace Bob.SharedMobility
 {
     [RequireComponent(typeof(AudioSource))]
     public class OnboardingFlowManager : MonoBehaviour
     {
-        // ==========================================
-        // 🏗️ 数据结构定义
-        // ==========================================
+        private const string BobMoveTweenId = "OnboardingFlow.BobMove";
+
         [System.Serializable]
         public class SequenceStep
         {
-            [Header("--- 画面 ---")]
-            public Sprite pageImage;      
-            public float duration = 4.0f; 
-            [Header("--- Bob 导演 ---")]
-            public Transform bobPos;      
-            public BobController.BobActionType action; 
+            [Header("Content")]
+            public Sprite pageImage;
+            public float duration = 4.0f;
+
+            [Header("Bob")]
+            public Transform bobPos;
+            public BobController.BobActionType action;
         }
 
         [System.Serializable]
         public class ChapterConfig
         {
-            public List<AudioClip> audioPlaylist; 
-            public List<SequenceStep> steps;      
+            public List<AudioClip> audioPlaylist;
+            public List<SequenceStep> steps;
         }
 
         [System.Serializable]
         public class SubPageData
         {
-            public string name; public GameObject pageObj; public Transform bobPos; public AudioClip voice;       
+            public string name;
+            public GameObject pageObj;
+            public Transform bobPos;
+            public AudioClip voice;
         }
 
-        // ==========================================
-        // 🔗 引用
-        // ==========================================
-        [Header("--- 0. 全局引用 ---")]
+        [Header("References")]
         public BobController bob;
-        public GameObject mainAppSystem; 
-        public GameObject introCanvas;   
-        public AudioSource bgmSource; 
+        public GameObject mainAppSystem;
+        public GameObject introCanvas;
+        public AudioSource bgmSource;
 
-        [Header("--- 1. Welcome 阶段 ---")]
+        [Header("Welcome")]
         public GameObject panelWelcome;
         public Transform posWelcome;
         public AudioClip audioWelcome;
-        // float autoStartDelay 已移除
 
-        [Header("--- 2. First Check 阶段 ---")]
+        [Header("First Check")]
         public GameObject panelFirstCheckRoot;
         public GameObject pageMain;
         public Transform posMain;
-        public AudioClip audioFirstCheckMain; 
-        public List<SubPageData> subPages; 
+        public AudioClip audioFirstCheckMain;
+        public List<SubPageData> subPages;
 
-        [Header("--- 3. Onboarding 系统 ---")]
+        [Header("Onboarding")]
         public GameObject panelOnboarding;
-        public Image displayImage;        
-        
-        [Header(">>> 3.1 Intro (2页)")]
-        public SequenceStep introStep1; 
-        public SequenceStep introStep2; 
-        public GameObject introButtonGroup; 
-        public AudioClip introAudio;        
+        public Image displayImage;
 
-        [Header(">>> 3.2 Skip 分支 (3页)")]
+        [Header("Intro")]
+        public SequenceStep introStep1;
+        public SequenceStep introStep2;
+        public GameObject introButtonGroup;
+        public AudioClip introAudio;
+
+        [Header("Skip Chapter")]
         public ChapterConfig skipChapter;
 
-        [Header(">>> 3.3 Yes 分支 (13页)")]
+        [Header("Yes Chapter")]
         public ChapterConfig yesChapter;
 
-        private AudioSource _sfxAudio; 
-        private Tween _welcomeTimer;
+        private AudioSource _sfxAudio;
         private Coroutine _currentRoutine;
+        private Coroutine _audioRoutine;
 
-        // ==========================================
-        // 🏁 启动与更新
-        // ==========================================
-        
-        IEnumerator Start()
+        private IEnumerator Start()
         {
             _sfxAudio = GetComponent<AudioSource>();
-            if (bgmSource == null) bgmSource = gameObject.AddComponent<AudioSource>();
 
-            yield return null; 
+            if (bgmSource == null)
+            {
+                bgmSource = gameObject.AddComponent<AudioSource>();
+            }
 
+            yield return null;
             FullRestart();
         }
 
-        void Update()
+        private void Update()
         {
-            // 1. 全局重启 (手柄 Start / 键盘 R / 手柄 B)
-            bool restartInput = false;
-            if (Gamepad.current != null)
-            {
-                if (Gamepad.current.startButton.wasPressedThisFrame) restartInput = true;
-                if (Gamepad.current.buttonEast.wasPressedThisFrame) restartInput = true; // B键也重启
-            }
-            if (Input.GetKeyDown(KeyCode.R)) restartInput = true;
-
-            if (restartInput)
+            if (ProjectInput.WasRestartPressed())
             {
                 FullRestart();
                 return;
             }
 
-            // 2. Welcome 点击进入
-            if (panelWelcome != null && panelWelcome.activeSelf)
+            if (panelWelcome != null
+                && panelWelcome.activeSelf
+                && (ProjectInput.WasPrimaryPointerPressed() || ProjectInput.WasPrimaryActionPressed()))
             {
-                bool clicked = false;
-                if (Input.GetMouseButtonDown(0)) clicked = true;
-                if (Input.GetKeyDown(KeyCode.Return)) clicked = true;
-                if (Gamepad.current != null && Gamepad.current.buttonSouth.wasPressedThisFrame) clicked = true;
-
-                if (clicked)
-                {
-                    OnClick_StartFirstCheck();
-                }
+                OnClick_StartFirstCheck();
             }
         }
 
-        // ==========================================
-        // 🔥🔥🔥 全局重置
-        // ==========================================
         public void FullRestart()
         {
-            StopAllCoroutines();
-            if (_currentRoutine != null) StopCoroutine(_currentRoutine);
-            _currentRoutine = null;
+            StopActiveRoutines();
+            KillFlowTweens();
 
-            if (_welcomeTimer != null) _welcomeTimer.Kill();
-            DOTween.KillAll(); 
-
-            if (bgmSource) bgmSource.Stop();
+            bgmSource.Stop();
             if (_sfxAudio) _sfxAudio.Stop();
 
             if (introCanvas) introCanvas.SetActive(true);
-            if (mainAppSystem) mainAppSystem.SetActive(false); 
-            HideAll(); 
-            
-            if (bob) 
-            {
-                // 重启时先强制显示，重置状态
-                bob.gameObject.SetActive(true); 
-                bob.transform.localScale = Vector3.one; 
-                bob.ResetState(); 
-                bob.ChangeSkin(0); 
+            if (mainAppSystem) mainAppSystem.SetActive(false);
 
-                // 如果 Welcome 有位置就去，没有就隐藏
-                if (posWelcome != null)
-                {
-                    bob.transform.position = posWelcome.position;
-                    bob.lastVanishedPos = posWelcome.position;
-                }
-                else
-                {
-                    bob.gameObject.SetActive(false);
-                }
-            }
-
-            EnterWelcome();
-        }
-
-        // ==========================================
-        // 1️⃣ Welcome 阶段
-        // ==========================================
-        void EnterWelcome()
-        {
             HideAll();
-            if(panelWelcome) panelWelcome.SetActive(true);
-            
-            // 此时根据 posWelcome 是否为空决定 Bob 去留
-            MoveBob(posWelcome);
-            PlaySFX(audioWelcome); 
-
-            if (_welcomeTimer != null) _welcomeTimer.Kill();
+            ResetBobForWelcome();
+            EnterWelcome();
         }
 
         public void OnClick_StartFirstCheck()
         {
-            if (_welcomeTimer != null) _welcomeTimer.Kill();
             EnterFirstCheckMain();
-        }
-
-        // ==========================================
-        // 2️⃣ First Check 阶段
-        // ==========================================
-        void EnterFirstCheckMain()
-        {
-            if (_welcomeTimer != null) _welcomeTimer.Kill();
-            HideAll(); 
-            if(panelFirstCheckRoot) panelFirstCheckRoot.SetActive(true);
-            foreach (var sub in subPages) if (sub.pageObj) sub.pageObj.SetActive(false);
-            if(pageMain) pageMain.SetActive(true); 
-            
-            // 🔥 这里会读取 posMain，如果是 None，Bob 就会消失
-            MoveBob(posMain);
-            PlaySFX(audioFirstCheckMain); 
         }
 
         public void OnClick_OpenSubPage(int index)
         {
-            if(pageMain) pageMain.SetActive(false); 
-            foreach (var sub in subPages) if (sub.pageObj) sub.pageObj.SetActive(false);
+            if (pageMain) pageMain.SetActive(false);
+            SetSubPagesActive(false);
 
-            if (index >= 0 && index < subPages.Count)
+            if (subPages == null || index < 0 || index >= subPages.Count)
             {
-                var data = subPages[index];
-                if(data.pageObj) data.pageObj.SetActive(true); 
-                
-                MoveBob(data.bobPos);
-                PlaySFX(data.voice); 
-                
-                if(bob && data.bobPos != null) bob.TriggerAction(BobController.BobActionType.PulseLight);
+                return;
+            }
+
+            SubPageData data = subPages[index];
+            if (data.pageObj) data.pageObj.SetActive(true);
+
+            MoveBob(data.bobPos);
+            PlaySFX(data.voice);
+
+            if (bob && data.bobPos != null)
+            {
+                bob.TriggerAction(BobController.BobActionType.PulseLight);
             }
         }
 
         public void OnClick_NextSubPage(int currentIndex)
         {
             int nextIndex = currentIndex + 1;
-            if (nextIndex < subPages.Count) OnClick_OpenSubPage(nextIndex);
-            else OnClick_FinishFirstCheck();
+            if (subPages != null && nextIndex < subPages.Count)
+            {
+                OnClick_OpenSubPage(nextIndex);
+                return;
+            }
+
+            OnClick_FinishFirstCheck();
         }
 
-        public void OnClick_BackToCheckMain() { EnterFirstCheckMain(); }
-        public void OnClick_FinishFirstCheck() { StartOnboardingIntro(); }
-        public void OnClick_SkipFirstCheck() { StartOnboardingIntro(); }
+        public void OnClick_BackToCheckMain()
+        {
+            EnterFirstCheckMain();
+        }
 
-        // ==========================================
-        // 3️⃣ Onboarding 阶段
-        // ==========================================
+        public void OnClick_FinishFirstCheck()
+        {
+            StartOnboardingIntro();
+        }
+
+        public void OnClick_SkipFirstCheck()
+        {
+            StartOnboardingIntro();
+        }
+
         public void StartOnboardingIntro()
         {
             HideAll();
             if (panelOnboarding) panelOnboarding.SetActive(true);
-            if (introButtonGroup) introButtonGroup.SetActive(false); 
-            if (_currentRoutine != null) StopCoroutine(_currentRoutine);
+            if (introButtonGroup) introButtonGroup.SetActive(false);
+
+            StopCurrentRoutine();
             _currentRoutine = StartCoroutine(RunIntroRoutine());
         }
 
-        IEnumerator RunIntroRoutine()
+        public void OnClick_ChooseSkip()
+        {
+            StartChapter(skipChapter);
+        }
+
+        public void OnClick_ChooseYes()
+        {
+            StartChapter(yesChapter);
+        }
+
+        private void EnterWelcome()
+        {
+            HideAll();
+            if (panelWelcome) panelWelcome.SetActive(true);
+
+            MoveBob(posWelcome);
+            PlaySFX(audioWelcome);
+        }
+
+        private void EnterFirstCheckMain()
+        {
+            HideAll();
+
+            if (panelFirstCheckRoot) panelFirstCheckRoot.SetActive(true);
+            SetSubPagesActive(false);
+            if (pageMain) pageMain.SetActive(true);
+
+            MoveBob(posMain);
+            PlaySFX(audioFirstCheckMain);
+        }
+
+        private IEnumerator RunIntroRoutine()
         {
             PlayLongAudio(introAudio);
-            ApplyStep(introStep1);
-            yield return new WaitForSeconds(introStep1.duration);
-            ApplyStep(introStep2);
-            
-            if (introButtonGroup) 
+
+            yield return PlayStep(introStep1);
+            yield return PlayStep(introStep2);
+
+            if (introButtonGroup)
             {
                 introButtonGroup.SetActive(true);
+                introButtonGroup.transform.DOKill();
                 introButtonGroup.transform.localScale = Vector3.zero;
                 introButtonGroup.transform.DOScale(Vector3.one, 0.5f).SetEase(Ease.OutBack);
             }
         }
 
-        public void OnClick_ChooseSkip()
+        private void StartChapter(ChapterConfig chapter)
         {
             if (introButtonGroup) introButtonGroup.SetActive(false);
-            if (_currentRoutine != null) StopCoroutine(_currentRoutine);
-            _currentRoutine = StartCoroutine(RunChapterRoutine(skipChapter));
+
+            StopCurrentRoutine();
+            _currentRoutine = StartCoroutine(RunChapterRoutine(chapter));
         }
 
-        public void OnClick_ChooseYes()
+        private IEnumerator RunChapterRoutine(ChapterConfig chapter)
         {
-            if (introButtonGroup) introButtonGroup.SetActive(false);
-            if (_currentRoutine != null) StopCoroutine(_currentRoutine);
-            _currentRoutine = StartCoroutine(RunChapterRoutine(yesChapter));
-        }
+            StopAudioRoutine();
 
-        IEnumerator RunChapterRoutine(ChapterConfig chapter)
-        {
-            StartCoroutine(PlayAudioPlaylist(chapter.audioPlaylist));
-            foreach (var step in chapter.steps)
+            if (chapter == null)
             {
-                ApplyStep(step);
-                yield return new WaitForSeconds(step.duration);
+                EndIntroFlow();
+                yield break;
             }
+
+            _audioRoutine = StartCoroutine(PlayAudioPlaylist(chapter.audioPlaylist));
+
+            if (chapter.steps != null)
+            {
+                foreach (SequenceStep step in chapter.steps)
+                {
+                    yield return PlayStep(step);
+                }
+            }
+
             EndIntroFlow();
         }
 
-        IEnumerator PlayAudioPlaylist(List<AudioClip> clips)
+        private IEnumerator PlayAudioPlaylist(List<AudioClip> clips)
         {
-            bgmSource.Stop();
-            foreach (var clip in clips)
+            if (!bgmSource) yield break;
+
+            if (bgmSource) bgmSource.Stop();
+
+            if (clips == null) yield break;
+
+            foreach (AudioClip clip in clips)
             {
-                if (clip != null)
-                {
-                    bgmSource.clip = clip;
-                    bgmSource.Play();
-                    yield return new WaitForSeconds(clip.length);
-                }
+                if (!clip) continue;
+
+                bgmSource.clip = clip;
+                bgmSource.Play();
+                yield return new WaitForSeconds(clip.length);
             }
         }
 
-        void ApplyStep(SequenceStep step)
+        private IEnumerator PlayStep(SequenceStep step)
         {
-            if (displayImage && step.pageImage) displayImage.sprite = step.pageImage;
-            MoveBob(step.bobPos);
-            if (bob && step.bobPos != null) bob.TriggerAction(step.action);
+            if (step == null) yield break;
+
+            ApplyStep(step);
+            yield return new WaitForSeconds(Mathf.Max(0f, step.duration));
         }
 
-        void EndIntroFlow()
+        private void ApplyStep(SequenceStep step)
+        {
+            if (displayImage && step.pageImage)
+            {
+                displayImage.sprite = step.pageImage;
+            }
+
+            MoveBob(step.bobPos);
+
+            if (bob && step.bobPos != null)
+            {
+                bob.TriggerAction(step.action);
+            }
+        }
+
+        private void EndIntroFlow()
         {
             if (introCanvas) introCanvas.SetActive(false);
             if (mainAppSystem) mainAppSystem.SetActive(true);
@@ -313,41 +313,115 @@ namespace Bob.SharedMobility
             if (bgmSource) bgmSource.Stop();
         }
 
-        void HideAll()
+        private void HideAll()
         {
             if (panelWelcome) panelWelcome.SetActive(false);
             if (panelFirstCheckRoot) panelFirstCheckRoot.SetActive(false);
             if (panelOnboarding) panelOnboarding.SetActive(false);
             if (pageMain) pageMain.SetActive(false);
-            foreach (var p in subPages) if(p.pageObj) p.pageObj.SetActive(false);
+            SetSubPagesActive(false);
         }
 
-        // ==========================================
-        // 🔥🔥 修复后的 MoveBob：支持隐身
-        // ==========================================
-        void MoveBob(Transform target)
+        private void SetSubPagesActive(bool isActive)
+        {
+            if (subPages == null) return;
+
+            foreach (SubPageData page in subPages)
+            {
+                if (page.pageObj) page.pageObj.SetActive(isActive);
+            }
+        }
+
+        private void MoveBob(Transform target)
         {
             if (!bob) return;
 
-            // 如果目标是空 (None)，说明这一页 Bob 需要隐身
-            if (target == null) 
-            { 
-                // 只是安静地隐藏，不再报错
-                bob.gameObject.SetActive(false); 
-                return; 
+            if (target == null)
+            {
+                bob.gameObject.SetActive(false);
+                return;
             }
 
-            // 如果有目标，确保显示
             bob.gameObject.SetActive(true);
-            DOTween.Kill(bob, "AppFlowMove");
+            DOTween.Kill(BobMoveTweenId);
 
             DOTween.To(() => bob.lastVanishedPos, x => bob.lastVanishedPos = x, target.position, 0.6f)
-                   .SetEase(Ease.OutBack).SetId("AppFlowMove");
+                .SetEase(Ease.OutBack)
+                .SetId(BobMoveTweenId);
 
-            bob.transform.DOLookAt(Camera.main.transform.position, 0.5f);
+            if (SceneCameraProvider.TryGetUICamera(out Camera uiCamera, bob))
+            {
+                bob.transform.DOLookAt(uiCamera.transform.position, 0.5f).SetId(BobMoveTweenId);
+            }
         }
 
-        void PlaySFX(AudioClip clip) { if (_sfxAudio && clip) { _sfxAudio.Stop(); _sfxAudio.PlayOneShot(clip); } }
-        void PlayLongAudio(AudioClip clip) { if (bgmSource && clip) { bgmSource.Stop(); bgmSource.clip = clip; bgmSource.Play(); } }
+        private void ResetBobForWelcome()
+        {
+            if (!bob) return;
+
+            bob.gameObject.SetActive(true);
+            bob.transform.localScale = Vector3.one;
+            bob.ResetState();
+            bob.ChangeSkin(0);
+
+            if (posWelcome != null)
+            {
+                bob.transform.position = posWelcome.position;
+                bob.lastVanishedPos = posWelcome.position;
+            }
+            else
+            {
+                bob.gameObject.SetActive(false);
+            }
+        }
+
+        private void PlaySFX(AudioClip clip)
+        {
+            if (!_sfxAudio || !clip) return;
+
+            _sfxAudio.Stop();
+            _sfxAudio.PlayOneShot(clip);
+        }
+
+        private void PlayLongAudio(AudioClip clip)
+        {
+            if (!bgmSource || !clip) return;
+
+            bgmSource.Stop();
+            bgmSource.clip = clip;
+            bgmSource.Play();
+        }
+
+        private void StopActiveRoutines()
+        {
+            StopCurrentRoutine();
+            StopAudioRoutine();
+        }
+
+        private void StopCurrentRoutine()
+        {
+            if (_currentRoutine == null) return;
+
+            StopCoroutine(_currentRoutine);
+            _currentRoutine = null;
+        }
+
+        private void StopAudioRoutine()
+        {
+            if (_audioRoutine == null) return;
+
+            StopCoroutine(_audioRoutine);
+            _audioRoutine = null;
+        }
+
+        private void KillFlowTweens()
+        {
+            DOTween.Kill(BobMoveTweenId);
+
+            if (introButtonGroup)
+            {
+                introButtonGroup.transform.DOKill();
+            }
+        }
     }
 }

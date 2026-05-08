@@ -42,7 +42,7 @@ namespace Bob.SharedMobility
             public Ease rotationEase;
         }
 
-        // 🔥🔥🔥 原生动作参数配置 (用于 TriggerAction)
+        // Native action tuning for TriggerAction.
         [System.Serializable]
         public struct BobActionSettings
         {
@@ -69,17 +69,17 @@ namespace Bob.SharedMobility
         }
 
         // ==========================================
-        // ⚙️ 变量配置
+        // Runtime configuration.
         // ==========================================
 
-        [Header("--- 皮肤系统 ---")]
+        [Header("Skins")]
         public List<SkinSet> skins;       
         public int currentSkinIndex = 0;  
 
-        [Header("--- 核心组件 ---")]
+        [Header("Core")]
         public Transform eyesRoot;           
 
-        [Header("--- 💡 提醒模式 (Reminder) ---")]
+        [Header("Reminder")]
         public GameObject lightBulbIcon; 
         public int reminderSkinIndex = 2; 
         public ReminderAnimSettings reminderAnim = new ReminderAnimSettings
@@ -90,7 +90,7 @@ namespace Bob.SharedMobility
             rotationEase = Ease.InOutBack
         };
 
-        [Header("--- 🔥 动作参数精调 (Inspector修改) ---")]
+        [Header("Actions")]
         public BobActionSettings actionSettings = new BobActionSettings
         {
             jumpHeight = 0.8f,
@@ -102,10 +102,13 @@ namespace Bob.SharedMobility
             spinDuration = 0.6f
         };
 
-        [Header("--- 🎮 待机行为控制 ---")]
-        public bool enableOrbitAtStart = true; 
+        [Header("Idle")]
+        public bool enableOrbitAtStart = true;
 
-        [Header("--- 📡 远程互动参数 ---")]
+        [Header("Diagnostics")]
+        public bool enableDebugSkinHotkeys = true;
+
+        [Header("Remote Interaction")]
         public RemoteStateData remoteState = new RemoteStateData 
         { 
             duration = 1.0f, 
@@ -115,7 +118,7 @@ namespace Bob.SharedMobility
             optimalTriggerDelay = 0.5f
         };
 
-        [Header("--- 悬浮参数 ---")]
+        [Header("Hover")]
         public float floatSpeed = 1.0f;      
         public float floatAmplitude = 0.1f;  
         
@@ -123,21 +126,21 @@ namespace Bob.SharedMobility
         private float _defaultFloatAmplitude;
         private float _burstYOffset = 0f; 
 
-        [Header("--- 巡航参数 ---")]
+        [Header("Orbit")]
         public float rotateSpeed = 1.0f;     
         public float rotateRadius = 0.2f;    
 
-        [Header("--- 调音台 ---")]
+        [Header("Mixer")]
         [Range(0, 1)] public float masterVolume = 0; 
         [Range(0, 1)] public float bodyOnlyVolume = 0; 
         [Range(0, 1)] public float coreOnlyVolume = 0; 
 
-        [Header("--- Shader 参数 ---")]
+        [Header("Shader")]
         public float minEnergy = 1f; public float maxEnergy = 5f;
         public float minCoreLight = 1.0f; public float maxCoreLight = 3.0f;
         public float minCoreSpeed = 0.5f; public float maxCoreSpeed = 3.0f;
 
-        [Header("--- 飞行/着陆/避让 ---")]
+        [Header("Flight")]
         public int stretchBlendShapeIndex = 0; 
         public float stretchDuration = 0.3f; 
         public float landSlideDist = 0.4f; 
@@ -188,11 +191,11 @@ namespace Bob.SharedMobility
         void Update()
         {
             // 键盘切皮肤仅在非提醒模式下可用
-            if (!_isInReminderMode)
+            if (!_isInReminderMode && enableDebugSkinHotkeys)
             {
-                if (Input.GetKeyDown(KeyCode.Alpha1)) ChangeSkin(0);
-                if (Input.GetKeyDown(KeyCode.Alpha2)) ChangeSkin(1);
-                if (Input.GetKeyDown(KeyCode.Alpha3)) ChangeSkin(2);
+                if (ProjectInput.WasKeyPressed(KeyCode.Alpha1)) ChangeSkin(0);
+                if (ProjectInput.WasKeyPressed(KeyCode.Alpha2)) ChangeSkin(1);
+                if (ProjectInput.WasKeyPressed(KeyCode.Alpha3)) ChangeSkin(2);
             }
 
             if (gameObject.activeSelf && !_isFlying && !_isAvoiding && !_isInReminderMode && transform.localScale.x > 0.1f)
@@ -239,7 +242,7 @@ namespace Bob.SharedMobility
         }
 
         // =========================================================
-        // 🔥🔥 原生动作接口 (供 OnboardingFlowManager 调用)
+        // Native animation actions used by onboarding and feedback flows.
         // =========================================================
         public void TriggerAction(BobActionType action)
         {
@@ -248,7 +251,7 @@ namespace Bob.SharedMobility
             switch (action)
             {
                 case BobActionType.JumpHigh:
-                    // 上冲 + 回落 (使用 Inspector 配置的参数)
+                    // Jump up and settle back using Inspector tuning.
                     Sequence jumpSeq = DOTween.Sequence();
                     jumpSeq.Append(DOTween.To(() => _burstYOffset, x => _burstYOffset = x, actionSettings.jumpHeight, actionSettings.jumpUpTime).SetEase(Ease.OutQuad));
                     jumpSeq.Append(DOTween.To(() => _burstYOffset, x => _burstYOffset = x, 0f, actionSettings.jumpDownTime).SetEase(Ease.OutBounce));
@@ -274,7 +277,7 @@ namespace Bob.SharedMobility
         }
 
         // =========================================================
-        // 🔥🔥 提醒模式 (跳跃 + 旋转 + 换皮 + 灯泡)
+        // Reminder mode animation.
         // =========================================================
         public void EnterReminderState()
         {
@@ -318,7 +321,7 @@ namespace Bob.SharedMobility
         }
 
         // =========================================================
-        // 🔥🔥 远程互动 (完整版)
+        // Remote interaction animation.
         // =========================================================
         public float PlayRemoteInteraction()
         {

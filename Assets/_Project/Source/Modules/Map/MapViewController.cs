@@ -6,6 +6,8 @@ namespace Bob.SharedMobility
 {
     public class MapViewController : MonoBehaviour
     {
+        public static MapViewController ActiveInstance { get; private set; }
+
         public enum ViewState
         {
             Small_Icon,
@@ -63,6 +65,24 @@ namespace Bob.SharedMobility
 
         private bool _isTransitioning;
         private Tween _delayedCallTween;
+
+        private void Awake()
+        {
+            if (ActiveInstance != null && ActiveInstance != this)
+            {
+                ProjectLog.Warning("Multiple MapViewController instances detected; the latest instance will be used.", this);
+            }
+
+            ActiveInstance = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (ActiveInstance == this)
+            {
+                ActiveInstance = null;
+            }
+        }
 
         private void Start()
         {

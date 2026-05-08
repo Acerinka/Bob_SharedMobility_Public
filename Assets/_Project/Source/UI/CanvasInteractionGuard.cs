@@ -36,7 +36,7 @@ namespace Bob.SharedMobility
 
         private void Update()
         {
-            if (debugClick && Input.GetMouseButtonDown(0))
+            if (debugClick && ProjectInput.WasPrimaryPointerPressed())
             {
                 LogPointerRaycastStack();
             }
@@ -116,7 +116,7 @@ namespace Bob.SharedMobility
 
             PointerEventData pointerData = new PointerEventData(EventSystem.current)
             {
-                position = Input.mousePosition
+                position = ProjectInput.PointerPosition
             };
 
             List<RaycastResult> results = new List<RaycastResult>();
