@@ -36,6 +36,8 @@ This Unity project treats runtime code as product code, not scene-local prototyp
 - Buttons and clickable world objects should own their own pointer event handlers.
 - UI panels should use `CanvasGroup` consistently: `alpha`, `blocksRaycasts`, and `interactable` must move together.
 - App-level navigation goes through `AppNavigationService` and `AppScreenId`.
+- Every new app page needs a route in `Assets/_Project/Settings/Navigation/AppNavigationRouteTable.asset`.
+- New page roots should start from `Assets/_Project/Prefabs/UI/Screens/PF_AppScreen_Template.prefab`.
 - New generic navigation buttons should use `AppNavigationButton` with an explicit `AppNavigationCommand`; keep direct Button-to-method scene bindings only for feature-local actions inside the active screen.
 - Panel show/hide animation should use `CanvasGroupPresenter` unless a feature has a stronger reason to own custom presentation.
 - App screen registration must be explicit in `Project_Runtime`; runtime discovery is reserved for bootstrap fallback, not primary scene configuration.
@@ -49,3 +51,16 @@ This Unity project treats runtime code as product code, not scene-local prototyp
 - Runtime fallback discovery is acceptable only in core bootstrap/resolver classes.
 - Debug utilities must be controlled by `RuntimeDiagnosticsHub`, disabled in release behavior, or guarded by `UNITY_EDITOR || DEVELOPMENT_BUILD`.
 - Voice debugging must expose both real input shortcuts and no-microphone command injection through `RuntimeDiagnosticsHub`.
+
+## Page Production Gate
+
+- Run `Tools/Bob Shared Mobility/Validate UI Page Architecture` before handing off a new page.
+- `PrototypeImage` routes are acceptable during migration, but they cannot be marked production-ready.
+- Baked PNG screens must be converted into componentized UI before final production status.
+- Direct button calls into `DockPanelController`, `DockNavigationManager`, or `MapViewController` are migration debt unless the button is strictly feature-local inside the active page.
+
+## Bob Motion
+
+- Bob target movement is owned by `BobInteractionDirector`; feature scripts should request targets instead of starting transform tweens on Bob directly.
+- Only one Bob flight sequence may be active at a time. New target commands during flight should be queued or explicitly cancelled through the director.
+- Do not call `bob.transform.DOKill()` from feature code. Use Bob controller/director APIs so `lastVanishedPos`, flying state, blend shapes, and idle hover stay coherent.

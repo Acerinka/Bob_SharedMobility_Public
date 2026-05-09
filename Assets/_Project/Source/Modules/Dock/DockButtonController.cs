@@ -32,6 +32,9 @@ namespace Bob.SharedMobility
         private Vector3 _baseInitScale;
         private Color _iconInitColor;
         private Sequence _currentSequence;
+        private Tween _bobLeaveTween;
+        private Tween _homeResetTween;
+        private int _bobInteractionToken;
 
         private void Awake()
         {
@@ -52,22 +55,45 @@ namespace Bob.SharedMobility
 
             if (isHomeButton)
             {
-                DOVirtual.DelayedCall(0.5f, ResetState);
+                _homeResetTween?.Kill();
+                _homeResetTween = DOVirtual.DelayedCall(0.5f, ResetState);
             }
         }
 
         public void ActivateByBob(CanvasGroup subMenu = null)
         {
+            ActivateByBob(subMenu, 0);
+        }
+
+        public void ActivateByBob(CanvasGroup subMenu, int bobInteractionToken)
+        {
             KillAllTweens();
+            _bobInteractionToken = bobInteractionToken;
             AnimateIconOnly();
             AnimateLiquidBase();
             TriggerLogic(subMenu);
 
             float delay = stayDuration > 0f ? stayDuration : 0.5f;
-            DOVirtual.DelayedCall(delay, OnBobLeave);
+            _bobLeaveTween?.Kill();
+            _bobLeaveTween = DOVirtual.DelayedCall(delay, OnBobLeave);
         }
 
         public void ResetState()
+        {
+            CancelBobInteraction();
+            ResetVisualState();
+        }
+
+        public void CancelBobInteraction()
+        {
+            _bobLeaveTween?.Kill();
+            _bobLeaveTween = null;
+            _homeResetTween?.Kill();
+            _homeResetTween = null;
+            _bobInteractionToken = 0;
+        }
+
+        private void ResetVisualState()
         {
             KillAllTweens();
 
@@ -163,12 +189,15 @@ namespace Bob.SharedMobility
 
         private void OnBobLeave()
         {
-            ResetState();
+            int interactionToken = _bobInteractionToken;
+            _bobInteractionToken = 0;
+            _bobLeaveTween = null;
+            ResetVisualState();
 
             if (!shouldBobReturn || !BobInteractionDirector.Instance) return;
 
             Vector3 exitPosition = liquidBase3D ? liquidBase3D.position : transform.position;
-            BobInteractionDirector.Instance.ReleaseBobFrom(exitPosition);
+            BobInteractionDirector.Instance.ReleaseBobFrom(exitPosition, interactionToken);
         }
 
         private void AnimateIconOnly()

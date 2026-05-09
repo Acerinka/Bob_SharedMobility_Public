@@ -46,7 +46,11 @@ namespace Bob.SharedMobility
         private Material _material;
         private Vector3 _originalScale;
         private Tweener _breathingTween;
+        private Sequence _enterSequence;
+        private Tween _bobLeaveTween;
+        private Tween _finalizeStateTween;
         private bool _handoffControl;
+        private int _bobInteractionToken;
 
         private static readonly int ThicknessID = Shader.PropertyToID("_BorderThickness");
         private static readonly int ScaleID = Shader.PropertyToID("_ContentScale");
@@ -110,14 +114,22 @@ namespace Bob.SharedMobility
                 _originalScale = Vector3.one;
             }
 
-            Sequence sequence = DOTween.Sequence();
-            sequence.AppendCallback(() => PlayImpact(impactDur));
-            sequence.AppendInterval(impactDur);
-            sequence.AppendCallback(() => PlayBurst(burstDur));
+            _enterSequence?.Kill();
+            _enterSequence = DOTween.Sequence();
+            _enterSequence.AppendCallback(() => PlayImpact(impactDur));
+            _enterSequence.AppendInterval(impactDur);
+            _enterSequence.AppendCallback(() => PlayBurst(burstDur));
         }
 
         public void OnBobEnter()
         {
+            OnBobEnter(0);
+        }
+
+        public void OnBobEnter(int bobInteractionToken)
+        {
+            _handoffControl = false;
+            _bobInteractionToken = bobInteractionToken;
             PlayEnterSequence(0.2f, 0.6f);
         }
 
@@ -150,6 +162,7 @@ namespace Bob.SharedMobility
 
         public void ResetState()
         {
+            CancelBobInteraction();
             StopAllAnimations();
             _handoffControl = false;
 
@@ -173,6 +186,17 @@ namespace Bob.SharedMobility
 
             Vector3 targetScale = _originalScale.magnitude > 0.01f ? _originalScale : Vector3.one;
             transform.DOScale(targetScale, 0.3f);
+        }
+
+        public void CancelBobInteraction()
+        {
+            _enterSequence?.Kill();
+            _enterSequence = null;
+            _bobLeaveTween?.Kill();
+            _bobLeaveTween = null;
+            _finalizeStateTween?.Kill();
+            _finalizeStateTween = null;
+            _bobInteractionToken = 0;
         }
 
         private void PlayImpact(float duration)
@@ -214,33 +238,42 @@ namespace Bob.SharedMobility
 
                 if (shouldBobReturn && BobInteractionDirector.Instance)
                 {
-                    BobInteractionDirector.Instance.ReleaseBobFrom(transform.position);
+                    int interactionToken = _bobInteractionToken;
+                    _bobInteractionToken = 0;
+                    BobInteractionDirector.Instance.ReleaseBobFrom(transform.position, interactionToken);
                 }
 
                 return;
             }
 
             float waitTime = stayDuration > 0f ? stayDuration : 0.5f;
-            DOVirtual.DelayedCall(waitTime, OnBobLeave);
+            _bobLeaveTween?.Kill();
+            _bobLeaveTween = DOVirtual.DelayedCall(waitTime, OnBobLeave);
         }
 
         private void OnBobLeave()
         {
             if (_handoffControl) return;
 
+            int interactionToken = _bobInteractionToken;
+            _bobInteractionToken = 0;
+            _bobLeaveTween = null;
+
             StopAllAnimations();
             transform.DOScale(_originalScale, transitionDuration).SetEase(Ease.OutQuad);
             ApplyStateTween(initialState, transitionDuration);
             HideFakeEyes();
 
-            DOVirtual.DelayedCall(transitionDuration + 0.1f, () =>
+            _finalizeStateTween?.Kill();
+            _finalizeStateTween = DOVirtual.DelayedCall(transitionDuration + 0.1f, () =>
             {
+                _finalizeStateTween = null;
                 ApplyStateImmediate(initialState);
             });
 
             if (shouldBobReturn && BobInteractionDirector.Instance)
             {
-                BobInteractionDirector.Instance.ReleaseBobFrom(transform.position);
+                BobInteractionDirector.Instance.ReleaseBobFrom(transform.position, interactionToken);
             }
         }
 

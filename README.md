@@ -23,6 +23,7 @@ Project-owned content lives under `Assets/_Project`:
 - `Media/Audio/Voice`: voice-over clips.
 - `Media/Video`: prototype video assets.
 - `Settings/Rendering`: URP and profile assets.
+- `Settings/Navigation`: app route tables and navigation configuration assets.
 - `Documentation`: local project and Unity template documentation assets.
 
 External/vendor content stays outside `_Project`, including `Assets/Plugins`, `Assets/TextMesh Pro`, `Assets/Oculus`, and `Assets/Resources/DOTweenSettings.asset`.
@@ -48,3 +49,7 @@ See `docs/RUNTIME_ARCHITECTURE.md`.
 ## UI Navigation Model
 
 See `docs/UI_NAVIGATION_MODEL.md`.
+
+## UI Page Authoring Kit
+
+See `docs/PAGE_AUTHORING_KIT.md`.

@@ -14,11 +14,21 @@ namespace Bob.SharedMobility
             [TextArea(1, 3)] public string inspectorNotes;
         }
 
+        private enum ScreenLifecyclePhase
+        {
+            Pause,
+            Resume
+        }
+
         public static AppNavigationService Instance { get; private set; }
 
         [Header("Scene Services")]
         [SerializeField] private DockNavigationManager dockNavigationManager;
         [SerializeField] private MapViewController mapController;
+
+        [Header("Route Table")]
+        [SerializeField] private AppNavigationRouteTable routeTable;
+        [SerializeField] private Transform dynamicScreenRoot;
 
         [Header("Screen Registry")]
         [SerializeField] private bool discoverScreensAutomatically = true;
@@ -41,9 +51,11 @@ namespace Bob.SharedMobility
         private readonly Dictionary<AppScreenId, AppScreenController> _screensById = new Dictionary<AppScreenId, AppScreenController>();
         private readonly Dictionary<AppScreenId, DockPanelController> _dockPanelsById = new Dictionary<AppScreenId, DockPanelController>();
         private readonly Dictionary<DockPanelController, AppScreenId> _screenIdsByDockPanel = new Dictionary<DockPanelController, AppScreenId>();
+        private readonly HashSet<AppScreenId> _missingRouteWarnings = new HashSet<AppScreenId>();
 
         public event System.Action<AppNavigationState> StateChanged;
 
+        public AppNavigationRouteTable RouteTable => routeTable;
         public AppScreenId CurrentScreen => currentScreen;
         public AppNavigationLayer CurrentLayer => currentLayer;
         public AppScreenId CurrentModal => currentModal;
@@ -97,6 +109,7 @@ namespace Bob.SharedMobility
             _screensById.Clear();
             _dockPanelsById.Clear();
             _screenIdsByDockPanel.Clear();
+            _missingRouteWarnings.Clear();
 
             foreach (AppScreenController screen in screenControllers)
             {
@@ -127,6 +140,59 @@ namespace Bob.SharedMobility
             RefreshWorldInputBlock();
         }
 
+        [ContextMenu("Validate Navigation Routes")]
+        public void ValidateNavigationRoutes()
+        {
+            if (!routeTable)
+            {
+                ProjectLog.Warning("AppNavigationService has no route table assigned.", this);
+                return;
+            }
+
+            HashSet<AppScreenId> routeIds = new HashSet<AppScreenId>();
+            foreach (AppNavigationRouteTable.Route route in routeTable.Routes)
+            {
+                if (route == null || route.screenId == AppScreenId.None)
+                {
+                    ProjectLog.Warning("Route table contains an empty route entry.", routeTable);
+                    continue;
+                }
+
+                if (!routeIds.Add(route.screenId))
+                {
+                    ProjectLog.Warning($"Route table contains duplicate screen id '{route.screenId}'.", routeTable);
+                }
+
+                if (route.routeKind == AppNavigationRouteTable.RouteKind.DockScreen
+                    && !_dockPanelsById.ContainsKey(route.screenId))
+                {
+                    ProjectLog.Warning($"Dock route '{route.screenId}' is not bound to a DockPanelController in the scene registry.", this);
+                }
+
+                bool requiresScreenController = route.routeKind == AppNavigationRouteTable.RouteKind.Screen
+                    || route.routeKind == AppNavigationRouteTable.RouteKind.Modal
+                    || route.routeKind == AppNavigationRouteTable.RouteKind.Overlay;
+
+                if (requiresScreenController
+                    && route.productionStatus == AppNavigationRouteTable.ProductionStatus.ProductionReady
+                    && !_screensById.ContainsKey(route.screenId)
+                    && route.screenPrefab == null)
+                {
+                    ProjectLog.Warning($"Production-ready route '{route.screenId}' has no scene AppScreenController and no screen prefab assigned.", routeTable);
+                }
+            }
+
+            foreach (AppScreenId screenId in _screensById.Keys)
+            {
+                WarnIfRouteMissing(screenId, this);
+            }
+
+            foreach (AppScreenId screenId in _dockPanelsById.Keys)
+            {
+                WarnIfRouteMissing(screenId, this);
+            }
+        }
+
         public void RegisterScreen(AppScreenController screen)
         {
             if (screen == null || screen.ScreenId == AppScreenId.None) return;
@@ -137,6 +203,7 @@ namespace Bob.SharedMobility
             }
 
             _screensById[screen.ScreenId] = screen;
+            WarnIfRouteMissing(screen.ScreenId, screen);
         }
 
         public void RegisterDockPanel(DockPanelController dockPanel)
@@ -184,6 +251,11 @@ namespace Bob.SharedMobility
                 return OpenDockPanel(dockPanel, subPanel);
             }
 
+            if (!_screensById.ContainsKey(screenId))
+            {
+                TryInstantiateRouteScreen(screenId);
+            }
+
             if (_screensById.TryGetValue(screenId, out AppScreenController screen))
             {
                 if (screen.NavigationLayer == AppNavigationLayer.Modal || screen.NavigationLayer == AppNavigationLayer.Overlay)
@@ -191,7 +263,7 @@ namespace Bob.SharedMobility
                     return OpenModal(screenId);
                 }
 
-                CloseAllModals(false);
+                CloseAllModals(false, false);
                 CloseCurrentScreen();
                 screen.Show();
                 SetNavigationState(screenId, screen.NavigationLayer, null, null);
@@ -219,7 +291,7 @@ namespace Bob.SharedMobility
                 HideRegisteredScreen(currentScreen);
             }
 
-            CloseAllModals(false);
+            CloseAllModals(false, false);
 
             if (dockNavigationManager)
             {
@@ -245,7 +317,7 @@ namespace Bob.SharedMobility
         {
             AppScreenId closingScreen = currentScreen;
 
-            CloseAllModals(false);
+            CloseAllModals(false, false);
 
             if (dockNavigationManager)
             {
@@ -294,6 +366,11 @@ namespace Bob.SharedMobility
                 ProjectLog.Warning($"Screen '{modalScreenId}' is registered as {modal.NavigationLayer}, not Modal/Overlay.", modal);
             }
 
+            if (_modalStack.Count == 0)
+            {
+                PauseCurrentScreen();
+            }
+
             modal.Show();
             if (!_modalStack.Contains(modal))
             {
@@ -319,6 +396,11 @@ namespace Bob.SharedMobility
             }
 
             RefreshWorldInputBlock();
+            if (_modalStack.Count == 0)
+            {
+                ResumeCurrentScreen();
+            }
+
             NotifyStateChanged();
         }
 
@@ -340,6 +422,43 @@ namespace Bob.SharedMobility
 
             _dockPanelsById[screenId] = dockPanel;
             _screenIdsByDockPanel[dockPanel] = screenId;
+            WarnIfRouteMissing(screenId, dockPanel);
+        }
+
+        private bool TryInstantiateRouteScreen(AppScreenId screenId)
+        {
+            if (!routeTable || !routeTable.TryGetRoute(screenId, out AppNavigationRouteTable.Route route))
+            {
+                return false;
+            }
+
+            if (!route.screenPrefab)
+            {
+                return false;
+            }
+
+            Transform parent = dynamicScreenRoot ? dynamicScreenRoot : transform;
+            GameObject instance = Instantiate(route.screenPrefab, parent);
+            instance.name = route.screenPrefab.name.Replace("PF_", "Screen_");
+
+            AppScreenController screen = instance.GetComponent<AppScreenController>();
+            if (!screen)
+            {
+                ProjectLog.Warning($"Route prefab for '{screenId}' has no AppScreenController.", instance);
+                Destroy(instance);
+                return false;
+            }
+
+            if (screen.ScreenId != screenId)
+            {
+                ProjectLog.Warning($"Route prefab for '{screenId}' has AppScreenController.ScreenId '{screen.ScreenId}'. Fix the prefab identity.", screen);
+                Destroy(instance);
+                return false;
+            }
+
+            screen.Hide(true);
+            RegisterScreen(screen);
+            return true;
         }
 
         private DockScreenBinding FindDockBinding(DockPanelController dockPanel)
@@ -413,7 +532,7 @@ namespace Bob.SharedMobility
             }
         }
 
-        private void CloseAllModals(bool notify)
+        private void CloseAllModals(bool notify, bool resumeUnderlying = true)
         {
             if (_modalStack.Count == 0)
             {
@@ -432,10 +551,77 @@ namespace Bob.SharedMobility
             _modalStack.Clear();
             RefreshWorldInputBlock();
 
+            if (resumeUnderlying)
+            {
+                ResumeCurrentScreen();
+            }
+
             if (notify)
             {
                 NotifyStateChanged();
             }
+        }
+
+        private void PauseCurrentScreen()
+        {
+            if (_screensById.TryGetValue(currentScreen, out AppScreenController screen) && screen)
+            {
+                screen.Pause();
+            }
+
+            if (currentDockPanel)
+            {
+                NotifyDockPanelLifecycle(currentDockPanel, ScreenLifecyclePhase.Pause);
+            }
+        }
+
+        private void ResumeCurrentScreen()
+        {
+            if (_screensById.TryGetValue(currentScreen, out AppScreenController screen) && screen)
+            {
+                screen.Resume();
+            }
+
+            if (currentDockPanel)
+            {
+                NotifyDockPanelLifecycle(currentDockPanel, ScreenLifecyclePhase.Resume);
+            }
+        }
+
+        private void NotifyDockPanelLifecycle(DockPanelController dockPanel, ScreenLifecyclePhase phase)
+        {
+            if (!dockPanel) return;
+
+            AppScreenId screenId = ResolveScreenId(dockPanel);
+            AppNavigationState state = new AppNavigationState(
+                screenId,
+                currentLayer,
+                currentModal,
+                worldInputBlocked);
+
+            foreach (MonoBehaviour behaviour in dockPanel.GetComponents<MonoBehaviour>())
+            {
+                IAppScreenLifecycle lifecycleHandler = behaviour as IAppScreenLifecycle;
+                if (lifecycleHandler == null) continue;
+
+                switch (phase)
+                {
+                    case ScreenLifecyclePhase.Pause:
+                        lifecycleHandler.OnScreenPause(state);
+                        break;
+                    case ScreenLifecyclePhase.Resume:
+                        lifecycleHandler.OnScreenResume(state);
+                        break;
+                }
+            }
+        }
+
+        private void WarnIfRouteMissing(AppScreenId screenId, UnityEngine.Object context)
+        {
+            if (!routeTable || screenId == AppScreenId.None || routeTable.Contains(screenId)) return;
+            if (!_missingRouteWarnings.Add(screenId)) return;
+
+            ProjectLog.Warning($"Screen '{screenId}' is registered in the scene but missing from the navigation route table.", context);
         }
 
         private void RefreshWorldInputBlock()

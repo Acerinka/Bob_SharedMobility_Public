@@ -29,7 +29,9 @@ The scene still has direct button-to-method wiring across many pages. That works
 The first industrialization pass introduces:
 
 - a serialized `ScreenId` enum for all major app screens;
+- an `AppNavigationRouteTable` asset that declares each route, layer, presentation mode, and production status;
 - `AppScreenController` for future screen roots that are not part of the legacy dock stack;
+- `AppScreenLifecycleController` for enter/exit/pause/resume hooks;
 - an `AppNavigationService` that opens/closes screens through a single API;
 - `CanvasGroupPresenter` so panel visibility always moves `alpha`, `blocksRaycasts`, and `interactable` together;
 - `AppNavigationButton` for new UI buttons that should request navigation instead of calling feature methods directly;
@@ -45,6 +47,9 @@ The existing Dock panels are now registered as `AppScreenId` entries and still k
 - `DockButtonController` routes user/Bob activation through `AppNavigationService` when it is present.
 - `DockPanelController` reports level-2 and level-3 panel changes back to the navigation service.
 - App panels expose `screenId` and `navigationLayer` in the Inspector.
+- `AppNavigationRouteTable.asset` is assigned on `Project_Runtime` and acts as the canonical page registry.
+- Route entries can point to screen prefabs; `AppNavigationService` can instantiate them when the screen is requested and not already present in the scene.
+- The page authoring validator lives at `Tools/Bob Shared Mobility/Validate UI Page Architecture`.
 - Modal/Overlay screens can be opened through `AppNavigationService.OpenModal(...)`; visible blocking modals prevent world collider input through `SceneWorldPointerRouter`.
 
 ## Migration Rule
@@ -55,6 +60,8 @@ New navigation should use one of these routes:
 - add `AppNavigationButton` to a UI button and choose a clear `AppNavigationCommand`;
 - keep feature-local methods only for logic inside the currently active screen.
 
-Do not add new navigation by relying on GameObject names or runtime discovery. If a new app screen is added, create an `AppScreenId` entry and register the screen/panel explicitly on `Project_Runtime`.
+Do not add new navigation by relying on GameObject names or runtime discovery. If a new app screen is added, create an `AppScreenId` entry, add a route in `AppNavigationRouteTable.asset`, and register the screen/panel explicitly on `Project_Runtime`.
+
+For the page creation workflow, follow `docs/PAGE_AUTHORING_KIT.md`.
 
 The scene should remain visually authored in Unity, but state transitions should be owned by navigation services rather than by loose GameObject activation calls spread across feature scripts.

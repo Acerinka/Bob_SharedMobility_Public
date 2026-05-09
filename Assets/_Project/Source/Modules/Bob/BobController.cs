@@ -6,6 +6,8 @@ namespace Bob.SharedMobility
 {
     public class BobController : MonoBehaviour
     {
+        private const string FlightShapeTweenId = "BobController.FlightShape";
+
         // ==========================================
         // 🏗️ 数据结构定义
         // ==========================================
@@ -166,6 +168,8 @@ namespace Bob.SharedMobility
         private bool _isInReminderMode = false; 
         private Tween _restoreTimer;      
 
+        public bool IsFlying => _isFlying;
+
         private static readonly int EnergyID = Shader.PropertyToID("_EnergyLevel");
         private static readonly int CoreLightID = Shader.PropertyToID("_CoreLight");
         private static readonly int CoreSpeedID = Shader.PropertyToID("_CoreSpeed");
@@ -246,7 +250,7 @@ namespace Bob.SharedMobility
         // =========================================================
         public void TriggerAction(BobActionType action)
         {
-            DOTween.Kill(this, "BobAction"); // 打断之前的动作
+            DOTween.Kill("BobAction"); // 打断之前的动作
 
             switch (action)
             {
@@ -327,7 +331,7 @@ namespace Bob.SharedMobility
         {
             if (_isFlying) return 0f;
 
-            DOTween.Kill(this, "RemoteFloat");
+            DOTween.Kill("RemoteFloat");
 
             float originalBodyVol = bodyOnlyVolume;
             
@@ -362,17 +366,18 @@ namespace Bob.SharedMobility
         // 🛠️ 辅助与状态管理
         // =========================================================
 
-        public void PrepareForFlight() { DOTween.Kill(transform); DOTween.Kill(this); if (_restoreTimer != null) _restoreTimer.Kill(); _isFlying = true; _isAvoiding = false; _isInReminderMode = false; floatSpeed = _defaultFloatSpeed; floatAmplitude = _defaultFloatAmplitude; _burstYOffset = 0f; transform.position = lastVanishedPos; transform.localScale = Vector3.zero; transform.localRotation = _initialRot; SetBlendShapeWeight(0f); bodyOnlyVolume = 0; gameObject.SetActive(true); }
+        public void PrepareForFlight() { DOTween.Kill(transform); DOTween.Kill(this); DOTween.Kill("BobAction"); DOTween.Kill("RemoteFloat"); DOTween.Kill(FlightShapeTweenId); if (_restoreTimer != null) _restoreTimer.Kill(); _isFlying = true; _isAvoiding = false; _isInReminderMode = false; floatSpeed = _defaultFloatSpeed; floatAmplitude = _defaultFloatAmplitude; _burstYOffset = 0f; transform.position = lastVanishedPos; transform.localScale = Vector3.zero; transform.localRotation = _initialRot; SetBlendShapeWeight(0f); bodyOnlyVolume = 0; gameObject.SetActive(true); }
         public Tween AppearAnim(float duration) { return transform.DOScale(_initialScale, duration).SetEase(Ease.OutBack); }
-        public void StartFlyingShape() { foreach (var skin in skins) { if (skin.bodyObject && skin.bodyObject.activeSelf) { var mesh = skin.bodyObject.GetComponent<SkinnedMeshRenderer>(); if (mesh) { DOTween.To(() => mesh.GetBlendShapeWeight(stretchBlendShapeIndex), x => mesh.SetBlendShapeWeight(stretchBlendShapeIndex, x), 100f, stretchDuration); } } } }
-        public void StartReturnShape(float totalFlightTime) { foreach (var skin in skins) { if (skin.bodyObject && skin.bodyObject.activeSelf) { var mesh = skin.bodyObject.GetComponent<SkinnedMeshRenderer>(); if (mesh) { Sequence s = DOTween.Sequence(); s.Append(DOTween.To(() => mesh.GetBlendShapeWeight(stretchBlendShapeIndex), x => mesh.SetBlendShapeWeight(stretchBlendShapeIndex, x), 100f, totalFlightTime * 0.4f).SetEase(Ease.OutQuad)); s.Append(DOTween.To(() => mesh.GetBlendShapeWeight(stretchBlendShapeIndex), x => mesh.SetBlendShapeWeight(stretchBlendShapeIndex, x), 0f, totalFlightTime * 0.6f).SetEase(Ease.InQuad)); } } } }
+        public void StartFlyingShape() { DOTween.Kill(FlightShapeTweenId); foreach (var skin in skins) { if (skin.bodyObject && skin.bodyObject.activeSelf) { var mesh = skin.bodyObject.GetComponent<SkinnedMeshRenderer>(); if (mesh) { DOTween.To(() => mesh.GetBlendShapeWeight(stretchBlendShapeIndex), x => mesh.SetBlendShapeWeight(stretchBlendShapeIndex, x), 100f, stretchDuration).SetId(FlightShapeTweenId); } } } }
+        public void StartReturnShape(float totalFlightTime) { DOTween.Kill(FlightShapeTweenId); foreach (var skin in skins) { if (skin.bodyObject && skin.bodyObject.activeSelf) { var mesh = skin.bodyObject.GetComponent<SkinnedMeshRenderer>(); if (mesh) { Sequence s = DOTween.Sequence(); s.SetId(FlightShapeTweenId); s.Append(DOTween.To(() => mesh.GetBlendShapeWeight(stretchBlendShapeIndex), x => mesh.SetBlendShapeWeight(stretchBlendShapeIndex, x), 100f, totalFlightTime * 0.4f).SetEase(Ease.OutQuad)); s.Append(DOTween.To(() => mesh.GetBlendShapeWeight(stretchBlendShapeIndex), x => mesh.SetBlendShapeWeight(stretchBlendShapeIndex, x), 0f, totalFlightTime * 0.6f).SetEase(Ease.InQuad)); } } } }
         public void ArriveAndVanish(Vector3 vanishPos) { lastVanishedPos = vanishPos; _isFlying = false; gameObject.SetActive(false); transform.localScale = _initialScale; SetBlendShapeWeight(0); }
         public void ArriveAndStay(Vector3 stayPos) { lastVanishedPos = stayPos; transform.position = stayPos; gameObject.SetActive(true); SetBlendShapeWeight(0); Sequence landSeq = DOTween.Sequence(); transform.localScale = _initialScale; Vector3 squashScale = new Vector3(_initialScale.x * landSquashXZ, _initialScale.y * landSquashY, _initialScale.z * landSquashXZ); landSeq.Append(transform.DOScale(squashScale, landSquashTime).SetEase(Ease.OutQuad)); landSeq.Append(transform.DOScale(_initialScale, landRecoverTime).SetEase(Ease.OutElastic)); Vector3 forwardDir = transform.forward; if (landSlideDist > 0) { Sequence slideSeq = DOTween.Sequence(); slideSeq.Append(transform.DOMove(stayPos + forwardDir * landSlideDist, landRecoverTime * 0.3f).SetEase(Ease.OutQuad)); slideSeq.Append(transform.DOMove(stayPos, landRecoverTime * 0.7f).SetEase(Ease.OutBack)); landSeq.Join(slideSeq); } if (landEnergyPulse > 0) { bodyOnlyVolume = 0; Sequence lightSeq = DOTween.Sequence(); lightSeq.Append(DOTween.To(() => bodyOnlyVolume, x => bodyOnlyVolume = x, landEnergyPulse, landSquashTime)); lightSeq.Append(DOTween.To(() => bodyOnlyVolume, x => bodyOnlyVolume = x, 0f, landRecoverTime).SetEase(Ease.OutSine)); landSeq.Join(lightSeq); } landSeq.OnComplete(() => { _isFlying = false; }); }
         public void DodgeDown() { if (_isFlying) return; if (_restoreTimer != null) _restoreTimer.Kill(); if (_isAvoiding) return; _isAvoiding = true; transform.DOKill(); transform.DOLocalMoveY(_initialPos.y - avoidDistance, moveDuration).SetEase(Ease.OutBack); }
         public void ReturnToIdleDelayed() { if (_isFlying) return; if (_restoreTimer != null) _restoreTimer.Kill(); _restoreTimer = DOVirtual.DelayedCall(restoreDelay, () => { _isAvoiding = false; transform.DOKill(); transform.DOLocalMove(_initialPos, moveDuration).SetEase(Ease.OutBack); }); }
+        public void CancelTransientMotion(bool preserveCurrentWorldPosition) { DOTween.Kill(transform); DOTween.Kill(this); DOTween.Kill("BobAction"); DOTween.Kill("RemoteFloat"); DOTween.Kill(FlightShapeTweenId); if (_restoreTimer != null) { _restoreTimer.Kill(); _restoreTimer = null; } if (preserveCurrentWorldPosition && gameObject.activeInHierarchy) { lastVanishedPos = transform.position; } _isFlying = false; _isAvoiding = false; _isInReminderMode = false; _burstYOffset = 0f; floatSpeed = _defaultFloatSpeed > 0 ? _defaultFloatSpeed : floatSpeed; floatAmplitude = _defaultFloatAmplitude > 0 ? _defaultFloatAmplitude : floatAmplitude; SetBlendShapeWeight(0); }
         void SetBlendShapeWeight(float val) { foreach (var skin in skins) { if (skin.bodyObject) { var mesh = skin.bodyObject.GetComponent<SkinnedMeshRenderer>(); if (mesh) mesh.SetBlendShapeWeight(stretchBlendShapeIndex, val); } } }
         public void ChangeSkin(int index) { if (index < 0 || index >= skins.Count) return; currentSkinIndex = index; for (int i = 0; i < skins.Count; i++) { bool isActive = (i == index); if (skins[i].bodyObject) skins[i].bodyObject.SetActive(isActive); if (skins[i].coreObject) skins[i].coreObject.SetActive(isActive); } GameObject activeBody = skins[index].bodyObject; GameObject activeCore = skins[index].coreObject; _curBodyMat = null; _curCoreMat = null; if (activeBody) { Renderer r = activeBody.GetComponent<Renderer>(); if (r) _curBodyMat = r.material; } if (activeCore) { Renderer r = activeCore.GetComponent<Renderer>(); if (r) _curCoreMat = r.material; } }
         void DoMixerSimulation() { float finalBodyVol = Mathf.Clamp01(masterVolume + bodyOnlyVolume); float finalCoreVol = Mathf.Clamp01(masterVolume + coreOnlyVolume); if (_curBodyMat) _curBodyMat.SetFloat(EnergyID, Mathf.Lerp(minEnergy, maxEnergy, finalBodyVol)); if (_curCoreMat) { _curCoreMat.SetFloat(CoreLightID, Mathf.Lerp(minCoreLight, maxCoreLight, finalCoreVol)); _curCoreMat.SetFloat(CoreSpeedID, Mathf.Lerp(minCoreSpeed, maxCoreSpeed, finalCoreVol)); } }
-        public void ResetState() { DOTween.Kill(transform); DOTween.Kill(this); if (_restoreTimer != null) _restoreTimer.Kill(); _isFlying = false; _isAvoiding = false; _isInReminderMode = false; gameObject.SetActive(true); transform.localPosition = _initialPos; transform.localRotation = _initialRot; transform.localScale = _initialScale; lastVanishedPos = transform.position; SetBlendShapeWeight(0); masterVolume = 0; bodyOnlyVolume = 0; coreOnlyVolume = 0; floatSpeed = _defaultFloatSpeed > 0 ? _defaultFloatSpeed : 1.0f; floatAmplitude = _defaultFloatAmplitude > 0 ? _defaultFloatAmplitude : 0.1f; _burstYOffset = 0f; if(lightBulbIcon) lightBulbIcon.SetActive(false); ChangeSkin(0); }
+        public void ResetState() { DOTween.Kill(transform); DOTween.Kill(this); DOTween.Kill("BobAction"); DOTween.Kill("RemoteFloat"); DOTween.Kill(FlightShapeTweenId); if (_restoreTimer != null) _restoreTimer.Kill(); _isFlying = false; _isAvoiding = false; _isInReminderMode = false; gameObject.SetActive(true); transform.localPosition = _initialPos; transform.localRotation = _initialRot; transform.localScale = _initialScale; lastVanishedPos = transform.position; SetBlendShapeWeight(0); masterVolume = 0; bodyOnlyVolume = 0; coreOnlyVolume = 0; floatSpeed = _defaultFloatSpeed > 0 ? _defaultFloatSpeed : 1.0f; floatAmplitude = _defaultFloatAmplitude > 0 ? _defaultFloatAmplitude : 0.1f; _burstYOffset = 0f; if(lightBulbIcon) lightBulbIcon.SetActive(false); ChangeSkin(0); }
     }
 }

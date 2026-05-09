@@ -4325,6 +4325,8 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   dockNavigationManager: {fileID: 518041275}
   mapController: {fileID: 80920266}
+  routeTable: {fileID: 11400000, guid: de6b057418a44f20a3a42cc948a06ea7, type: 2}
+  dynamicScreenRoot: {fileID: 0}
   discoverScreensAutomatically: 0
   screenControllers: []
   discoverDockPanelsAutomatically: 0
