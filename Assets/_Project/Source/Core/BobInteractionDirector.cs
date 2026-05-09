@@ -247,9 +247,12 @@ namespace Bob.SharedMobility
 
             if (target.targetID == "Mapfull" && MapViewController.ActiveInstance)
             {
-                if (MapViewController.ActiveInstance.currentState == MapViewController.ViewState.Full_Screen)
+                MapViewController activeMapController = MapViewController.ActiveInstance;
+
+                if (activeMapController.currentState == MapViewController.ViewState.Full_Screen)
                 {
-                    MapViewController.ActiveInstance.ToggleFullView();
+                    activeMapController.ToggleFullView();
+                    ClearCurrentCommandLock();
                     return true;
                 }
 
@@ -269,10 +272,16 @@ namespace Bob.SharedMobility
                 }
 
                 mapController.ToggleMediumView();
+                ClearCurrentCommandLock();
                 return true;
             }
 
             return false;
+        }
+
+        private void ClearCurrentCommandLock()
+        {
+            _currentLocID = "";
         }
 
         private void TriggerRemoteTarget(BobTarget target)
@@ -283,6 +292,7 @@ namespace Bob.SharedMobility
             _remoteEventTween = DOVirtual.DelayedCall(recommendedDelay, () =>
             {
                 target.onRemoteEvent?.Invoke();
+                ClearCurrentCommandLock();
                 _remoteEventTween = null;
                 RunQueuedTargetIfAny();
             }).SetId(BobFlightTweenId);

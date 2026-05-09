@@ -53,12 +53,21 @@ namespace Bob.SharedMobility
         public Ease openEase = Ease.OutElastic;
         public Ease closeEase = Ease.InBack;
 
+        [Header("Transition Queue")]
+        [Tooltip("Queue the latest requested map state while another map state transition is still playing.")]
+        public bool queueStateChangesWhileTransitioning = true;
+
         [Header("Visibility")]
         public ViewStateConfig smallConfig = new ViewStateConfig { stateName = "Small State Config" };
         public ViewStateConfig mediumConfig = new ViewStateConfig { stateName = "Medium State Config" };
         public ViewStateConfig fullConfig = new ViewStateConfig { stateName = "Full State Config" };
+
+        [Header("Visibility Timing")]
         [Tooltip("Switch state-owned UI fragments at the beginning of a map transition so labels and side panels stay in rhythm with the map surface.")]
         public bool syncConfigVisibilityWithTransition = true;
+        [Min(0f)]
+        [Tooltip("Inspector-tunable delay before state-owned UI fragments switch during a map transition. Increase it when labels feel too early; decrease it when they feel late.")]
+        public float configVisibilityTransitionDelay = 0.5f;
 
         [Header("Delayed Icons")]
         public List<GameObject> delayedIcons;
@@ -66,8 +75,12 @@ namespace Bob.SharedMobility
         public float appearDuration = 1.0f;
 
         private bool _isTransitioning;
+        private bool _hasQueuedState;
+        private ViewState _queuedState;
         private Sequence _transitionSequence;
         private Tween _delayedCallTween;
+
+        public bool IsTransitioning => _isTransitioning;
 
         private void Awake()
         {
@@ -136,6 +149,16 @@ namespace Bob.SharedMobility
 
         public void SwitchToState(ViewState newState, bool instant = false)
         {
+            if (_isTransitioning && !instant && queueStateChangesWhileTransitioning)
+            {
+                if (currentState != newState)
+                {
+                    QueueStateChange(newState);
+                }
+
+                return;
+            }
+
             if (!_isTransitioning && currentState == newState && !instant)
             {
                 ForceCurrentStateConsistency();
@@ -154,14 +177,10 @@ namespace Bob.SharedMobility
 
             if (instant)
             {
+                ClearQueuedState();
                 ForceOnlyTargetView(targetView, endScale);
                 CompleteTransition(newState, null);
                 return;
-            }
-
-            if (syncConfigVisibilityWithTransition)
-            {
-                ApplyConfigForState(newState);
             }
 
             Sequence sequence = DOTween.Sequence();
@@ -170,6 +189,7 @@ namespace Bob.SharedMobility
             AppendHideNonTargetViews(sequence, targetView);
             sequence.AppendCallback(() => PrepareTargetView(targetView, endScale));
             AppendShowTargetView(sequence, targetView, endScale);
+            AppendConfigVisibilitySync(sequence, newState);
 
             sequence.OnKill(() =>
             {
@@ -182,6 +202,12 @@ namespace Bob.SharedMobility
             {
                 CompleteTransition(newState, sequence);
             });
+        }
+
+        public void QueueStateChange(ViewState newState)
+        {
+            _queuedState = newState;
+            _hasQueuedState = true;
         }
 
         public void CycleNext()
@@ -267,6 +293,15 @@ namespace Bob.SharedMobility
             view.GetComponent<LiquidIconController>()?.StopAllAnimations();
         }
 
+        private void AppendConfigVisibilitySync(Sequence sequence, ViewState newState)
+        {
+            if (!syncConfigVisibilityWithTransition) return;
+
+            sequence.InsertCallback(
+                Mathf.Max(0f, configVisibilityTransitionDelay),
+                () => ApplyConfigForState(newState));
+        }
+
         private void AppendHideNonTargetViews(Sequence sequence, GameObject targetView)
         {
             AppendHideView(sequence, viewSmall, targetView);
@@ -349,6 +384,28 @@ namespace Bob.SharedMobility
             _isTransitioning = false;
             ApplyConfigForState(newState);
             HandleDelayedIcons(newState);
+            RunQueuedStateChange();
+        }
+
+        private void RunQueuedStateChange()
+        {
+            if (!_hasQueuedState) return;
+
+            ViewState queuedState = _queuedState;
+            ClearQueuedState();
+
+            if (queuedState == currentState)
+            {
+                ForceCurrentStateConsistency();
+                return;
+            }
+
+            SwitchToState(queuedState);
+        }
+
+        private void ClearQueuedState()
+        {
+            _hasQueuedState = false;
         }
 
         private static void ResetIconController(GameObject view, Vector3 scale)
