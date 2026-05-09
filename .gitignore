@@ -28,6 +28,9 @@
 # Visual Studio cache directory
 .vs/
 
+# Codex/local automation scratch space
+.codex-tools/
+
 # Gradle cache directory
 .gradle/
 

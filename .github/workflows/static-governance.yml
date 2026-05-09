@@ -1,0 +1,135 @@
+name: Static Governance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  project-governance:
+    name: Project governance checks
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Validate repository structure
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $failures = New-Object System.Collections.Generic.List[string]
+
+          function Add-Failure([string]$message) {
+            $script:failures.Add($message)
+          }
+
+          function To-RepoPath([string]$path) {
+            return ($path -replace [regex]::Escape((Get-Location).Path + [IO.Path]::DirectorySeparatorChar), "") -replace "\\", "/"
+          }
+
+          foreach ($required in @(
+            "README.md",
+            "CHANGELOG.md",
+            "CONTRIBUTING.md",
+            "CODE_OF_CONDUCT.md",
+            "SECURITY.md",
+            "SUPPORT.md",
+            "docs/DELIVERY_REGRESSION_CHECKLIST.md",
+            "docs/MEDIA_ASSET_GOVERNANCE.md",
+            "docs/PROJECT_INDUSTRIALIZATION_AUDIT.md",
+            "Assets/_Project/Scenes/BobSharedMobility.unity"
+          )) {
+            if (-not (Test-Path -LiteralPath $required)) {
+              Add-Failure "Missing required delivery file: $required"
+            }
+          }
+
+          $sourceRoot = "Assets/_Project/Source"
+          if (Test-Path -LiteralPath $sourceRoot) {
+            Get-ChildItem -Path $sourceRoot -Recurse -Filter *.cs | ForEach-Object {
+              $repoPath = To-RepoPath $_.FullName
+              $lineCount = (Get-Content -LiteralPath $_.FullName).Count
+              if ($lineCount -gt 450) {
+                Add-Failure "$repoPath has $lineCount lines; split or document an exception."
+              }
+
+              if (-not (Test-Path -LiteralPath ($_.FullName + ".meta"))) {
+                Add-Failure "$repoPath is missing its Unity .meta file."
+              }
+            }
+          } else {
+            Add-Failure "Missing source root: $sourceRoot"
+          }
+
+          $inputOwners = @(
+            "Assets/_Project/Source/Core/ProjectInput.cs",
+            "Assets/_Project/Source/Core/GamepadButtonReader.cs",
+            "Assets/_Project/Source/Utils/GamepadInputDebugger.cs"
+          )
+
+          $discoveryOwners = @(
+            "Assets/_Project/Source/Core/Navigation/AppNavigationService.Registry.cs",
+            "Assets/_Project/Source/Core/RuntimeDiagnosticsHub.Diagnostics.cs",
+            "Assets/_Project/Source/Core/ScenePointerRouting.cs",
+            "Assets/_Project/Source/Core/SceneWorldPointerRouter.cs"
+          )
+
+          Get-ChildItem -Path $sourceRoot -Recurse -Filter *.cs | ForEach-Object {
+            $repoPath = To-RepoPath $_.FullName
+            $text = Get-Content -LiteralPath $_.FullName -Raw
+            $isEditorScript = $repoPath -like "Assets/_Project/Source/Editor/*"
+
+            if (-not $isEditorScript -and $inputOwners -notcontains $repoPath) {
+              foreach ($pattern in @("Input.Get", "Keyboard.current", "Gamepad.current")) {
+                if ($text.Contains($pattern)) {
+                  Add-Failure "$repoPath uses direct input access '$pattern'. Route through project input owners."
+                }
+              }
+            }
+
+            if (-not $isEditorScript -and $discoveryOwners -notcontains $repoPath) {
+              foreach ($pattern in @("FindObjectOfType", "FindObjectsOfType", "FindFirstObjectByType", "FindAnyObjectByType", "GameObject.Find", "FindWithTag")) {
+                if ($text.Contains($pattern)) {
+                  Add-Failure "$repoPath uses scene-wide discovery '$pattern'. Use serialized references, services, or document an owner exception."
+                }
+              }
+            }
+          }
+
+          $assetRoot = "Assets/_Project"
+          if (Test-Path -LiteralPath $assetRoot) {
+            Get-ChildItem -Path "$assetRoot/Prefabs" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq ".prefab" } | ForEach-Object {
+              if ($_.BaseName -notlike "PF_*") { Add-Failure "$(To-RepoPath $_.FullName) should use the PF_ prefab prefix." }
+            }
+
+            Get-ChildItem -Path "$assetRoot/Art/Textures" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match "^\.(png|jpg|jpeg|tga|psd|webp)$" } | ForEach-Object {
+              if ($_.BaseName -notlike "TEX_*" -and $_.BaseName -notlike "REF_*") { Add-Failure "$(To-RepoPath $_.FullName) should use TEX_ or REF_." }
+            }
+
+            Get-ChildItem -Path "$assetRoot/Art/Materials" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq ".mat" } | ForEach-Object {
+              if ($_.BaseName -notlike "MAT_*") { Add-Failure "$(To-RepoPath $_.FullName) should use the MAT_ material prefix." }
+            }
+
+            Get-ChildItem -Path "$assetRoot/Art/Shaders/ShaderGraphs" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq ".shadergraph" } | ForEach-Object {
+              if ($_.BaseName -notlike "SG_*") { Add-Failure "$(To-RepoPath $_.FullName) should use the SG_ shader graph prefix." }
+            }
+
+            Get-ChildItem -Path "$assetRoot/Media/Audio/Voice" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match "^\.(wav|mp3|ogg)$" } | ForEach-Object {
+              if ($_.BaseName -notlike "VO_*") { Add-Failure "$(To-RepoPath $_.FullName) should use the VO_ voice prefix." }
+            }
+
+            Get-ChildItem -Path "$assetRoot/Media/Video" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match "^\.(mp4|mov)$" } | ForEach-Object {
+              if ($_.BaseName -notlike "VID_*") { Add-Failure "$(To-RepoPath $_.FullName) should use the VID_ video prefix." }
+            }
+          }
+
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Error $_ }
+            throw "Static governance failed with $($failures.Count) issue(s)."
+          }
+
+          Write-Host "Static governance checks passed."

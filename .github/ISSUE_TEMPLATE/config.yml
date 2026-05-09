@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Delivery regression checklist
+    url: https://github.com/Acerinka/Bob_SharedMobility_Public/blob/main/docs/DELIVERY_REGRESSION_CHECKLIST.md
+    about: Start here when validating handoff quality.

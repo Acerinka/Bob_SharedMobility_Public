@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a reproducible defect in the Unity project.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction Steps
+      description: Include scene, input sequence, and timing.
+      placeholder: |
+        1. Open ...
+        2. Press ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Result
+    validations:
+      required: true
+  - type: input
+    id: unity
+    attributes:
+      label: Unity Version
+      placeholder: 2022.3.53f1
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs And Media
+      description: Paste relevant Console logs or attach screenshots/videos.
+      render: shell

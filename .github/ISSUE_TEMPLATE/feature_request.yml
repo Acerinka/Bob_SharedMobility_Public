@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a project improvement or new behavior.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Or Opportunity
+      description: What user, delivery, or engineering problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Direction
+      description: Describe the desired behavior or implementation direction.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: What must be true for this to be considered done?
+      placeholder: |
+        - ...
+        - ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Bob interaction
+        - Navigation
+        - UI scene/prefab
+        - Media asset
+        - Documentation
+        - Tooling/governance
+        - Other
+    validations:
+      required: true
