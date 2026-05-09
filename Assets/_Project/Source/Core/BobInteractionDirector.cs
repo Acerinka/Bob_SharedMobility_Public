@@ -207,6 +207,12 @@ namespace Bob.SharedMobility
 
                 if (ProjectInput.WasKeyPressed(target.debugKey))
                 {
+                    if (TryHandleDebugBackdoor(target))
+                    {
+                        ProjectLog.Info($"Debug shortcut selected target: {target.targetID}", this);
+                        continue;
+                    }
+
                     if (GoToTarget(target))
                     {
                         ProjectLog.Info($"Debug shortcut selected target: {target.targetID}", this);
@@ -233,6 +239,40 @@ namespace Bob.SharedMobility
             }
 
             return null;
+        }
+
+        private bool TryHandleDebugBackdoor(BobTarget target)
+        {
+            if (target == null || string.IsNullOrEmpty(target.targetID)) return false;
+
+            if (target.targetID == "Mapfull" && MapViewController.ActiveInstance)
+            {
+                if (MapViewController.ActiveInstance.currentState == MapViewController.ViewState.Full_Screen)
+                {
+                    MapViewController.ActiveInstance.ToggleFullView();
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (target.targetObject == null) return false;
+
+            MapViewController mapController = target.targetObject.GetComponentInParent<MapViewController>(true);
+            if (!mapController) return false;
+
+            if (target.targetID == "Map" || target.targetID == "map")
+            {
+                if (mapController.currentState == MapViewController.ViewState.Small_Icon)
+                {
+                    return false;
+                }
+
+                mapController.ToggleMediumView();
+                return true;
+            }
+
+            return false;
         }
 
         private void TriggerRemoteTarget(BobTarget target)

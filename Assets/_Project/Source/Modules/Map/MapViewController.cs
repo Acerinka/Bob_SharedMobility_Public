@@ -57,6 +57,8 @@ namespace Bob.SharedMobility
         public ViewStateConfig smallConfig = new ViewStateConfig { stateName = "Small State Config" };
         public ViewStateConfig mediumConfig = new ViewStateConfig { stateName = "Medium State Config" };
         public ViewStateConfig fullConfig = new ViewStateConfig { stateName = "Full State Config" };
+        [Tooltip("Switch state-owned UI fragments at the beginning of a map transition so labels and side panels stay in rhythm with the map surface.")]
+        public bool syncConfigVisibilityWithTransition = true;
 
         [Header("Delayed Icons")]
         public List<GameObject> delayedIcons;
@@ -64,6 +66,7 @@ namespace Bob.SharedMobility
         public float appearDuration = 1.0f;
 
         private bool _isTransitioning;
+        private Sequence _transitionSequence;
         private Tween _delayedCallTween;
 
         private void Awake()
@@ -78,6 +81,9 @@ namespace Bob.SharedMobility
 
         private void OnDestroy()
         {
+            _transitionSequence?.Kill();
+            _delayedCallTween?.Kill();
+
             if (ActiveInstance == this)
             {
                 ActiveInstance = null;
@@ -109,9 +115,32 @@ namespace Bob.SharedMobility
             SwitchToState(ViewState.Full_Screen);
         }
 
+        public void TriggerSmallView()
+        {
+            SwitchToState(ViewState.Small_Icon);
+        }
+
+        public void ToggleMediumView()
+        {
+            SwitchToState(currentState == ViewState.Medium_Screen
+                ? ViewState.Small_Icon
+                : ViewState.Medium_Screen);
+        }
+
+        public void ToggleFullView()
+        {
+            SwitchToState(currentState == ViewState.Full_Screen
+                ? ViewState.Medium_Screen
+                : ViewState.Full_Screen);
+        }
+
         public void SwitchToState(ViewState newState, bool instant = false)
         {
-            if (!_isTransitioning && currentState == newState && !instant) return;
+            if (!_isTransitioning && currentState == newState && !instant)
+            {
+                ForceCurrentStateConsistency();
+                return;
+            }
 
             currentState = newState;
             _isTransitioning = true;
@@ -119,16 +148,39 @@ namespace Bob.SharedMobility
 
             ResolveTargetView(newState, out GameObject targetView, out Vector3 endScale);
 
-            Sequence sequence = DOTween.Sequence();
+            _transitionSequence?.Kill(false);
+            _delayedCallTween?.Kill();
             StopViewAnimations();
-            AppendHideCurrentViews(sequence);
+
+            if (instant)
+            {
+                ForceOnlyTargetView(targetView, endScale);
+                CompleteTransition(newState, null);
+                return;
+            }
+
+            if (syncConfigVisibilityWithTransition)
+            {
+                ApplyConfigForState(newState);
+            }
+
+            Sequence sequence = DOTween.Sequence();
+            _transitionSequence = sequence;
+
+            AppendHideNonTargetViews(sequence, targetView);
+            sequence.AppendCallback(() => PrepareTargetView(targetView, endScale));
             AppendShowTargetView(sequence, targetView, endScale);
 
+            sequence.OnKill(() =>
+            {
+                if (_transitionSequence == sequence)
+                {
+                    _transitionSequence = null;
+                }
+            });
             sequence.OnComplete(() =>
             {
-                _isTransitioning = false;
-                ApplyConfigForState(newState);
-                HandleDelayedIcons(newState);
+                CompleteTransition(newState, sequence);
             });
         }
 
@@ -215,39 +267,88 @@ namespace Bob.SharedMobility
             view.GetComponent<LiquidIconController>()?.StopAllAnimations();
         }
 
-        private void AppendHideCurrentViews(Sequence sequence)
+        private void AppendHideNonTargetViews(Sequence sequence, GameObject targetView)
         {
-            AppendHideView(sequence, viewSmall);
-            AppendHideView(sequence, viewMedium);
-            AppendHideView(sequence, viewFull);
+            AppendHideView(sequence, viewSmall, targetView);
+            AppendHideView(sequence, viewMedium, targetView);
+            AppendHideView(sequence, viewFull, targetView);
 
             sequence.AppendCallback(() =>
             {
-                if (viewSmall) viewSmall.SetActive(false);
-                if (viewMedium) viewMedium.SetActive(false);
-                if (viewFull) viewFull.SetActive(false);
+                DeactivateIfNotTarget(viewSmall, targetView);
+                DeactivateIfNotTarget(viewMedium, targetView);
+                DeactivateIfNotTarget(viewFull, targetView);
             });
         }
 
-        private void AppendHideView(Sequence sequence, GameObject view)
+        private void AppendHideView(Sequence sequence, GameObject view, GameObject targetView)
         {
-            if (view && view.activeSelf)
+            if (view && view != targetView && view.activeSelf)
             {
                 sequence.Join(view.transform.DOScale(Vector3.zero, retractDuration).SetEase(closeEase));
             }
         }
 
+        private void PrepareTargetView(GameObject targetView, Vector3 targetScale)
+        {
+            if (!targetView) return;
+
+            ResetIconController(targetView, targetScale);
+            targetView.SetActive(true);
+            targetView.transform.DOKill();
+            targetView.transform.localScale = Vector3.zero;
+        }
+
         private void AppendShowTargetView(Sequence sequence, GameObject targetView, Vector3 targetScale)
         {
-            sequence.AppendCallback(() =>
-            {
-                if (!targetView) return;
+            if (!targetView) return;
 
-                ResetIconController(targetView, targetScale);
-                targetView.SetActive(true);
-                targetView.transform.localScale = Vector3.zero;
-                targetView.transform.DOScale(targetScale, popDuration).SetEase(openEase, elasticity);
-            });
+            sequence.Append(targetView.transform.DOScale(targetScale, popDuration).SetEase(openEase, elasticity));
+        }
+
+        private void ForceOnlyTargetView(GameObject targetView, Vector3 targetScale)
+        {
+            ResetIconController(targetView, targetScale);
+            ForceViewState(viewSmall, viewSmall == targetView, viewSmall == targetView ? targetScale : Vector3.zero);
+            ForceViewState(viewMedium, viewMedium == targetView, viewMedium == targetView ? targetScale : Vector3.zero);
+            ForceViewState(viewFull, viewFull == targetView, viewFull == targetView ? targetScale : Vector3.zero);
+        }
+
+        private void ForceCurrentStateConsistency()
+        {
+            ResolveTargetView(currentState, out GameObject targetView, out Vector3 targetScale);
+            ForceOnlyTargetView(targetView, targetScale);
+            ApplyConfigForState(currentState);
+            HandleDelayedIcons(currentState);
+        }
+
+        private static void ForceViewState(GameObject view, bool isActive, Vector3 scale)
+        {
+            if (!view) return;
+
+            view.transform.DOKill();
+            view.SetActive(isActive);
+            view.transform.localScale = isActive ? scale : Vector3.zero;
+        }
+
+        private static void DeactivateIfNotTarget(GameObject view, GameObject targetView)
+        {
+            if (view && view != targetView)
+            {
+                view.SetActive(false);
+            }
+        }
+
+        private void CompleteTransition(ViewState newState, Sequence completedSequence)
+        {
+            if (completedSequence == null || _transitionSequence == completedSequence)
+            {
+                _transitionSequence = null;
+            }
+
+            _isTransitioning = false;
+            ApplyConfigForState(newState);
+            HandleDelayedIcons(newState);
         }
 
         private static void ResetIconController(GameObject view, Vector3 scale)
