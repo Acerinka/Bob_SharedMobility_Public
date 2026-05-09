@@ -41,6 +41,7 @@ jobs:
             "docs/DELIVERY_REGRESSION_CHECKLIST.md",
             "docs/MEDIA_ASSET_GOVERNANCE.md",
             "docs/PROJECT_INDUSTRIALIZATION_AUDIT.md",
+            "docs/SETUP_AND_SECRETS.md",
             "Assets/_Project/Scenes/BobSharedMobility.unity"
           )) {
             if (-not (Test-Path -LiteralPath $required)) {
@@ -124,6 +125,27 @@ jobs:
 
             Get-ChildItem -Path "$assetRoot/Media/Video" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match "^\.(mp4|mov)$" } | ForEach-Object {
               if ($_.BaseName -notlike "VID_*") { Add-Failure "$(To-RepoPath $_.FullName) should use the VID_ video prefix." }
+            }
+          }
+
+          $secretExtensions = @(".cs", ".asset", ".unity", ".prefab", ".json", ".config", ".md", ".yml", ".yaml", ".txt")
+          Get-ChildItem -Path . -Recurse -File -Force | Where-Object {
+            $_.FullName -notmatch "\\.git\\" -and $secretExtensions -contains $_.Extension.ToLowerInvariant()
+          } | ForEach-Object {
+            $repoPath = To-RepoPath $_.FullName
+            $text = Get-Content -LiteralPath $_.FullName -Raw
+
+            if ($text -match 'sk-(proj-)?[A-Za-z0-9_-]{16,}') {
+              Add-Failure "$repoPath appears to contain an OpenAI-style API key. Use local environment variables or GitHub secrets."
+            }
+
+            if ($text -match '"serverToken"\s*:\s*"(?!")([^"]+)"') {
+              Add-Failure "$repoPath contains a non-empty Wit/Meta serverToken. Keep provider tokens out of git."
+            }
+
+            $serializedApiKey = [regex]::Match($text, '(?m)^[ \t]*apiKey:[ \t]*([^ \t\r\n]+)')
+            if ($serializedApiKey.Success -and -not $serializedApiKey.Groups[1].Value.StartsWith("<")) {
+              Add-Failure "$repoPath contains a serialized apiKey value. Keep scene and prefab API keys blank."
             }
           }
 

@@ -21,10 +21,12 @@ namespace Bob.SharedMobility
     public class VoiceCommandRecognizer : MonoBehaviour
     {
         private const string TranscriptionUrl = "https://api.openai.com/v1/audio/transcriptions";
-        private const string PlaceholderApiKey = "sk-xxxxxxxxxxxxxxxxxxxxxxxx";
+        private const string PlaceholderApiKey = "<OPENAI_API_KEY>";
+        private const string DefaultApiKeyEnvironmentVariable = "OPENAI_API_KEY";
 
         [Header("OpenAI")]
         public string apiKey = PlaceholderApiKey;
+        public string apiKeyEnvironmentVariable = DefaultApiKeyEnvironmentVariable;
         [TextArea] public string prompt = "Bob, Weather, Map, Music, Home, Cancel, Setting, open map, weather, music, settings";
 
         [Header("Diagnostics")]
@@ -168,9 +170,11 @@ namespace Bob.SharedMobility
                 yield break;
             }
 
-            if (!HasConfiguredApiKey())
+            if (!TryGetConfiguredApiKey(out string resolvedApiKey))
             {
-                ProjectLog.Warning("Voice transcription is skipped because no OpenAI API key is configured.", this);
+                ProjectLog.Warning(
+                    $"Voice transcription is skipped because no OpenAI API key is configured. Set {apiKeyEnvironmentVariable} locally or fill the Inspector field for local testing.",
+                    this);
                 SetBobVolume(0f);
                 yield break;
             }
@@ -184,7 +188,7 @@ namespace Bob.SharedMobility
 
             using (UnityWebRequest request = UnityWebRequest.Post(TranscriptionUrl, formData))
             {
-                request.SetRequestHeader("Authorization", "Bearer " + apiKey);
+                request.SetRequestHeader("Authorization", "Bearer " + resolvedApiKey);
                 yield return request.SendWebRequest();
 
                 if (request.result == UnityWebRequest.Result.Success)
@@ -285,10 +289,32 @@ namespace Bob.SharedMobility
                 .Replace("?", "");
         }
 
-        private bool HasConfiguredApiKey()
+        private bool TryGetConfiguredApiKey(out string resolvedApiKey)
         {
-            return !string.IsNullOrWhiteSpace(apiKey)
-                && apiKey != PlaceholderApiKey;
+            resolvedApiKey = NormalizeApiKey(apiKey);
+            if (!string.IsNullOrEmpty(resolvedApiKey))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(apiKeyEnvironmentVariable))
+            {
+                return false;
+            }
+
+            resolvedApiKey = NormalizeApiKey(System.Environment.GetEnvironmentVariable(apiKeyEnvironmentVariable.Trim()));
+            return !string.IsNullOrEmpty(resolvedApiKey);
+        }
+
+        private static string NormalizeApiKey(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+            string trimmed = value.Trim();
+            if (trimmed == PlaceholderApiKey) return string.Empty;
+            if (trimmed.StartsWith("<") && trimmed.EndsWith(">")) return string.Empty;
+
+            return trimmed;
         }
 
         private void SetBobVolume(float value)

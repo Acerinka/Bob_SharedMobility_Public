@@ -19,6 +19,8 @@ The current `main` branch is the hardened delivery branch. It includes the Bob i
 3. Open `Assets/_Project/Scenes/BobSharedMobility.unity`.
 4. Press Play and run the checklist in `docs/DELIVERY_REGRESSION_CHECKLIST.md`.
 
+The base prototype runs without external API keys. Real microphone transcription is optional and requires a local OpenAI API key; see `docs/SETUP_AND_SECRETS.md`.
+
 ## Project Layout
 
 Project-owned content lives under `Assets/_Project`:
@@ -55,6 +57,7 @@ This branch has been prepared for review as `v1.1` quality:
 
 - `docs/DELIVERY_REGRESSION_CHECKLIST.md`: acceptance and regression checklist.
 - `docs/PROJECT_INDUSTRIALIZATION_AUDIT.md`: industrialization audit and remaining improvement register.
+- `docs/SETUP_AND_SECRETS.md`: local setup, API keys, microphone, and GitHub secret guidance.
 - `docs/MEDIA_ASSET_GOVERNANCE.md`: media import and encoding policy.
 - `docs/RUNTIME_ARCHITECTURE.md`: runtime architecture overview.
 - `docs/UI_NAVIGATION_MODEL.md`: route-table navigation model.
@@ -72,6 +75,7 @@ Before submitting changes:
 4. Preserve Unity `.meta` files.
 5. Keep project assets under `Assets/_Project` and follow the prefix rules in `docs/ASSET_NAMING.md`.
 6. Re-encode any large media assets according to `docs/MEDIA_ASSET_GOVERNANCE.md`.
+7. Do not commit local API keys, Wit/Meta server tokens, Unity license files, or personal debug WAV output.
 
 The GitHub Actions workflow in `.github/workflows/static-governance.yml` enforces static delivery checks that do not require a Unity license.
 

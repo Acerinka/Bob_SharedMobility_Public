@@ -9,6 +9,7 @@ Thanks for helping keep Bob Shared Mobility reviewable and production-minded.
 3. Preserve Unity `.meta` files whenever assets move or change.
 4. Run the relevant Unity scene checks before opening a pull request.
 5. Fill out the pull request template and include regression notes.
+6. Confirm local API keys or service tokens were not serialized into project files.
 
 ## Project Rules
 
@@ -19,6 +20,7 @@ Thanks for helping keep Bob Shared Mobility reviewable and production-minded.
 - Scene-wide discovery should stay isolated to documented compatibility or diagnostic code.
 - UI navigation should prefer route tables, services, and explicit component references over persistent scene calls.
 - Large media assets must follow `docs/MEDIA_ASSET_GOVERNANCE.md`.
+- Optional online services must follow `docs/SETUP_AND_SECRETS.md`.
 
 ## Validation
 
@@ -26,6 +28,7 @@ Before asking for review, use:
 
 - `docs/DELIVERY_REGRESSION_CHECKLIST.md`
 - `docs/PROJECT_INDUSTRIALIZATION_AUDIT.md`
+- `docs/SETUP_AND_SECRETS.md`
 - Unity Play Mode validation of `Assets/_Project/Scenes/BobSharedMobility.unity`
 
 GitHub Actions also runs static governance checks for repository hygiene.

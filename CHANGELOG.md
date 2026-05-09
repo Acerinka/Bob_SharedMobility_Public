@@ -2,6 +2,13 @@
 
 All notable project delivery changes are recorded here.
 
+## 1.1.1 - 2026-05-09
+
+- Added explicit setup and secret-handling documentation for OpenAI voice transcription, microphone testing, Wit/Meta settings, and GitHub secrets.
+- Updated `VoiceCommandRecognizer` to resolve `OPENAI_API_KEY` from the local environment before requiring Inspector-only configuration.
+- Cleared committed Wit/Meta `serverToken` values from `ProjectSettings/wit.config`.
+- Extended static governance checks to catch committed OpenAI-like keys, non-empty Wit server tokens, and serialized scene API keys.
+
 ## 1.1.0 - 2026-05-09
 
 - Hardened Bob interaction scheduling so runtime targets can interrupt or queue consistently.

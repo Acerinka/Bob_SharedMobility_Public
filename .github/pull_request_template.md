@@ -18,6 +18,7 @@
 - [ ] Checked dock panel open/close behavior when relevant
 - [ ] Verified no Unity console errors from this change
 - [ ] Updated docs or checklist entries when behavior changed
+- [ ] Confirmed no local API keys, server tokens, `.env` files, or debug WAV files are committed
 
 ## Notes
 

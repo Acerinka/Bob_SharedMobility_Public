@@ -31,6 +31,15 @@
 # Codex/local automation scratch space
 .codex-tools/
 
+# Local credentials and license files
+.env
+.env.*
+*.ulf
+Unity_v*.alf
+
+# Local voice diagnostics
+voice-command-debug.wav
+
 # Gradle cache directory
 .gradle/
 
