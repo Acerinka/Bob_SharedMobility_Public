@@ -49,9 +49,18 @@ namespace Bob.SharedMobility
 
         public void OnUserClick()
         {
+            bool closesCurrentDockTarget = IsCurrentDockTargetOpen(null);
+
             KillAllTweens();
-            AnimateIconOnly();
             TriggerLogic(null);
+
+            if (closesCurrentDockTarget)
+            {
+                ResetVisualState();
+                return;
+            }
+
+            AnimateIconOnly();
 
             if (isHomeButton)
             {
@@ -171,11 +180,11 @@ namespace Bob.SharedMobility
             {
                 if (navigationService)
                 {
-                    navigationService.OpenDockPanel(myAppController, subMenu);
+                    navigationService.ToggleDockPanel(myAppController, subMenu);
                 }
                 else
                 {
-                    dockNavigationManager.SwitchToApp(myAppController, subMenu);
+                    dockNavigationManager.ToggleApp(myAppController, subMenu);
                 }
 
                 return;
@@ -185,6 +194,28 @@ namespace Bob.SharedMobility
             {
                 navigationService.OpenScreen(screenId, subMenu);
             }
+        }
+
+        private bool IsCurrentDockTargetOpen(CanvasGroup subMenu)
+        {
+            if (isHomeButton || !myAppController) return false;
+
+            AppNavigationService navigationService = AppNavigationService.Instance;
+            if (navigationService)
+            {
+                return navigationService.CurrentDockPanel == myAppController
+                    && navigationService.CurrentSubPanel == subMenu;
+            }
+
+            DockNavigationManager dockNavigationManager = DockNavigationManager.Instance;
+            if (dockNavigationManager)
+            {
+                return dockNavigationManager.CurrentActiveApp == myAppController
+                    && (subMenu == null || myAppController.CurrentActiveLevel3 == subMenu);
+            }
+
+            return myAppController.IsOpen
+                && (subMenu == null || myAppController.CurrentActiveLevel3 == subMenu);
         }
 
         private void OnBobLeave()

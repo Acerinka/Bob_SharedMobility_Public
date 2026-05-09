@@ -1162,6 +1162,9 @@ MonoBehaviour:
   elasticity: 1
   openEase: 24
   closeEase: 26
+  retargetStateChangesWhileTransitioning: 1
+  queueStateChangesWhileTransitioning: 1
+  enforceExclusiveSurfaceOwnership: 1
   smallConfig:
     stateName: Small State Config
     objectsToShow:
@@ -1195,9 +1198,17 @@ MonoBehaviour:
     - {fileID: 2118686018}
     - {fileID: 659913585}
     - {fileID: 1313905622}
+  syncConfigVisibilityWithTransition: 1
+  configVisibilityTransitionDelay: 0.25
+  animateConfigVisibility: 1
+  configVisibilityFadeDuration: 0.25
+  configHiddenScaleMultiplier: 0.92
   delayedIcons: []
   appearDelay: 3
   appearDuration: 1
+  settledState: 0
+  visibleSurfaceDebug:
+  queuedStateDebug: <none>
 --- !u!1 &86150379
 GameObject:
   m_ObjectHideFlags: 0
@@ -8772,6 +8783,7 @@ MonoBehaviour:
   flyDuration: 0.6
   appearDuration: 0
   waitTimeBeforeFly: 0
+  resetSceneBeforeRemoteTriggers: 1
 --- !u!4 &779085253
 Transform:
   m_ObjectHideFlags: 0

@@ -28,7 +28,7 @@ namespace Bob.SharedMobility
 
             if (!navigationService)
             {
-                navigationService = FindObjectOfType<AppNavigationService>(true);
+                navigationService = AppNavigationService.Instance;
             }
         }
 
@@ -42,15 +42,9 @@ namespace Bob.SharedMobility
 
         public void SwitchToApp(DockPanelController targetApp, CanvasGroup subMenu = null)
         {
-            if (_currentActiveApp == targetApp && subMenu == null)
-            {
-                CloseCurrentApp();
-                return;
-            }
-
             if (_currentActiveApp != null && _currentActiveApp != targetApp)
             {
-                _currentActiveApp.CloseEntireApp();
+                _currentActiveApp.ApplyCloseEntireApp();
             }
 
             if (targetApp == null)
@@ -70,15 +64,33 @@ namespace Bob.SharedMobility
 
             if (subMenu != null)
             {
-                targetApp.OpenSpecificLevel3(subMenu);
+                targetApp.ApplyOpenSpecificLevel3(subMenu);
             }
             else
             {
-                targetApp.OpenLevel2Menu();
+                targetApp.ApplyOpenLevel2Menu();
             }
 
             UpdateBobAvoidance(targetApp);
             navigationService?.NotifyDockPanelOpened(targetApp, subMenu);
+        }
+
+        public void ToggleApp(DockPanelController targetApp, CanvasGroup subMenu = null)
+        {
+            if (targetApp == null)
+            {
+                CloseCurrentApp();
+                return;
+            }
+
+            if (_currentActiveApp == targetApp
+                && (subMenu == null || targetApp.CurrentActiveLevel3 == subMenu))
+            {
+                CloseCurrentApp();
+                return;
+            }
+
+            SwitchToApp(targetApp, subMenu);
         }
 
         public void CloseCurrentApp()
@@ -87,7 +99,7 @@ namespace Bob.SharedMobility
 
             if (_currentActiveApp != null)
             {
-                _currentActiveApp.CloseEntireApp();
+                _currentActiveApp.ApplyCloseEntireApp();
                 _currentActiveApp = null;
             }
 

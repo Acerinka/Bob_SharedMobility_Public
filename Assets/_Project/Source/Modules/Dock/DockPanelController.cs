@@ -39,6 +39,51 @@ namespace Bob.SharedMobility
 
         public void OpenLevel2Menu()
         {
+            if (TryRouteOpenRequest(null)) return;
+
+            ApplyOpenLevel2Menu();
+        }
+
+        public void OpenSpecificLevel3(CanvasGroup targetSubPanel)
+        {
+            if (targetSubPanel == null) return;
+            if (TryRouteOpenRequest(targetSubPanel)) return;
+
+            ApplyOpenSpecificLevel3(targetSubPanel);
+        }
+
+        public void BackToLevel2()
+        {
+            if (TryRouteOpenRequest(null)) return;
+
+            ApplyOpenLevel2Menu();
+        }
+
+        public void CloseEntireApp()
+        {
+            if (TryRouteCloseRequest()) return;
+
+            ApplyCloseEntireApp();
+        }
+
+        public void OnCloseButtonClicked()
+        {
+            if (AppNavigationService.Instance)
+            {
+                AppNavigationService.Instance.CloseCurrentScreen();
+            }
+            else if (DockNavigationManager.Instance)
+            {
+                DockNavigationManager.Instance.CloseCurrentApp();
+            }
+            else
+            {
+                ApplyCloseEntireApp();
+            }
+        }
+
+        internal void ApplyOpenLevel2Menu()
+        {
             if (_currentActiveLevel3 != null)
             {
                 CanvasGroupPresenter.HideImmediate(_currentActiveLevel3);
@@ -50,7 +95,7 @@ namespace Bob.SharedMobility
             AppNavigationService.Instance?.NotifyDockPanelOpened(this, null);
         }
 
-        public void OpenSpecificLevel3(CanvasGroup targetSubPanel)
+        internal void ApplyOpenSpecificLevel3(CanvasGroup targetSubPanel)
         {
             if (targetSubPanel == null) return;
 
@@ -66,20 +111,7 @@ namespace Bob.SharedMobility
             AppNavigationService.Instance?.NotifyDockPanelOpened(this, targetSubPanel);
         }
 
-        public void BackToLevel2()
-        {
-            if (_currentActiveLevel3 != null)
-            {
-                ClosePanel(_currentActiveLevel3);
-                _currentActiveLevel3 = null;
-            }
-
-            OpenPanel(myLevel2Panel);
-            IsOpen = true;
-            AppNavigationService.Instance?.NotifyDockPanelOpened(this, null);
-        }
-
-        public void CloseEntireApp()
+        internal void ApplyCloseEntireApp()
         {
             ClosePanel(myLevel2Panel);
 
@@ -98,16 +130,42 @@ namespace Bob.SharedMobility
             }
         }
 
-        public void OnCloseButtonClicked()
+        private bool TryRouteOpenRequest(CanvasGroup targetSubPanel)
         {
-            if (AppNavigationService.Instance)
+            AppNavigationService navigationService = AppNavigationService.Instance;
+            if (navigationService)
             {
-                AppNavigationService.Instance.CloseCurrentScreen();
+                navigationService.OpenDockPanel(this, targetSubPanel);
+                return true;
             }
-            else if (DockNavigationManager.Instance)
+
+            DockNavigationManager dockNavigationManager = DockNavigationManager.Instance;
+            if (dockNavigationManager)
             {
-                DockNavigationManager.Instance.CloseCurrentApp();
+                dockNavigationManager.SwitchToApp(this, targetSubPanel);
+                return true;
             }
+
+            return false;
+        }
+
+        private bool TryRouteCloseRequest()
+        {
+            AppNavigationService navigationService = AppNavigationService.Instance;
+            if (navigationService && navigationService.CurrentDockPanel == this)
+            {
+                navigationService.CloseCurrentScreen();
+                return true;
+            }
+
+            DockNavigationManager dockNavigationManager = DockNavigationManager.Instance;
+            if (dockNavigationManager && dockNavigationManager.CurrentActiveApp == this)
+            {
+                dockNavigationManager.CloseCurrentApp();
+                return true;
+            }
+
+            return false;
         }
 
         private void OpenPanel(CanvasGroup canvasGroup)

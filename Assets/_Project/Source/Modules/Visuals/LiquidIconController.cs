@@ -153,6 +153,10 @@ namespace Bob.SharedMobility
         {
             _breathingTween?.Kill();
             transform.DOKill();
+            if (iconFakeEyes)
+            {
+                iconFakeEyes.transform.DOKill();
+            }
 
             if (_material)
             {
@@ -197,6 +201,12 @@ namespace Bob.SharedMobility
             _finalizeStateTween?.Kill();
             _finalizeStateTween = null;
             _bobInteractionToken = 0;
+
+            if (iconFakeEyes)
+            {
+                iconFakeEyes.transform.DOKill();
+                iconFakeEyes.SetActive(false);
+            }
         }
 
         private void PlayImpact(float duration)
@@ -233,12 +243,13 @@ namespace Bob.SharedMobility
 
             if (hasEvent)
             {
+                // The event may switch map surfaces and cancel this controller, so preserve the token first.
+                int interactionToken = _bobInteractionToken;
                 _handoffControl = true;
                 onInteractionComplete.Invoke();
 
                 if (shouldBobReturn && BobInteractionDirector.Instance)
                 {
-                    int interactionToken = _bobInteractionToken;
                     _bobInteractionToken = 0;
                     BobInteractionDirector.Instance.ReleaseBobFrom(transform.position, interactionToken);
                 }

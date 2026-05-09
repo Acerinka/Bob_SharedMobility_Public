@@ -55,6 +55,8 @@ This Unity project treats runtime code as product code, not scene-local prototyp
 ## Page Production Gate
 
 - Run `Tools/Bob Shared Mobility/Validate UI Page Architecture` before handing off a new page.
+- Run `Tools/Bob Shared Mobility/Validate Project Industrialization` before handing off broad runtime, asset, or scene-architecture changes.
+- Run `Tools/Bob Shared Mobility/Assets/Log Large Media Backlog` before media-heavy UI handoff, and use `Apply Texture Import Policy` for known large texture folders.
 - `PrototypeImage` routes are acceptable during migration, but they cannot be marked production-ready.
 - Baked PNG screens must be converted into componentized UI before final production status.
 - Direct button calls into `DockPanelController`, `DockNavigationManager`, or `MapViewController` are migration debt unless the button is strictly feature-local inside the active page.

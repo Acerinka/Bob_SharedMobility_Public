@@ -35,3 +35,9 @@ All project-owned Unity assets should live under `Assets/_Project`. Third-party 
 - Use two-digit numbers for ordered assets: `Step01`, `Homepage12`, `Alt01`.
 - Avoid spaces, punctuation-only distinctions, raw export names, sentence names, and temporary names like `test`, `new`, `copy`, or `final2`.
 - Preserve Unity `.meta` files when moving or renaming assets.
+
+## Import Governance
+
+- Large PNGs over 8 MB must be reviewed before production handoff.
+- Runtime prototype UI textures should follow `docs/MEDIA_ASSET_GOVERNANCE.md` until they are replaced by componentized UI.
+- Video files over 50 MB need an explicit encoding review and Unity playback validation.

@@ -5,7 +5,7 @@ using UnityEngine.Events;
 
 namespace Bob.SharedMobility
 {
-    public class BobInteractionDirector : MonoBehaviour
+    public partial class BobInteractionDirector : MonoBehaviour
     {
         private const string BobFlightTweenId = "BobInteractionDirector.Flight";
 
@@ -53,6 +53,26 @@ namespace Bob.SharedMobility
         public float duplicateCommandCooldown = 0.2f;
         [Tooltip("When Bob is already flying, keep the latest different command and run it after the current flight lands.")]
         public bool queueLatestCommandWhileFlying = true;
+        [Tooltip("Let code-owned runtime commands, such as full-map expansion, cancel the active Bob/icon interaction instead of waiting behind it.")]
+        public bool interruptActiveInteractionForRuntimeMapCommands = true;
+        [Tooltip("Remote Bob targets still own the workspace. Keep this enabled so targets such as full-screen map close dock panels before their remote event fires.")]
+        public bool resetSceneBeforeRemoteTriggers = true;
+        [Tooltip("Treat an already-open Bob dock-target shortcut as a close/toggle command instead of flying Bob to the same target again.")]
+        public bool suppressAlreadyOpenDockTargets = true;
+        [Min(0f)]
+        [Tooltip("Extra time after Bob's own landing recovery before queued commands are released.")]
+        public float landingCompletionBuffer = 0.02f;
+
+        [Header("Runtime Snapshot (Read Only)")]
+        [SerializeField] private BobCommandPhase commandPhase = BobCommandPhase.Idle;
+        [SerializeField] private BobCommandResult lastCommandResult = BobCommandResult.Accepted;
+        [SerializeField] private string activeTargetId = "";
+        [SerializeField] private string queuedTargetId = "";
+        [SerializeField] private int activeInteractionTokenDebug;
+        [SerializeField] private bool hasFlightSequence;
+        [SerializeField] private bool hasRemoteEventDelay;
+        [SerializeField] private bool bobReportsFlying;
+        [SerializeField] private bool bobActiveInHierarchy;
 
         private string _currentLocID = "";
         private string _lastAcceptedTargetID = "";
@@ -83,6 +103,8 @@ namespace Bob.SharedMobility
 
         private void Update()
         {
+            RefreshRuntimeSnapshot();
+
             if (!enableDebugShortcuts) return;
 
             HandleDebugTargetShortcuts();
@@ -91,6 +113,8 @@ namespace Bob.SharedMobility
             {
                 ResetAll();
             }
+
+            RefreshRuntimeSnapshot();
         }
 
         public void ProcessVoiceCommand(string text)
@@ -100,15 +124,13 @@ namespace Bob.SharedMobility
             BobTarget target = FindVoiceTarget(text);
             if (target != null)
             {
-                if (GoToTarget(target))
-                {
-                    ProjectLog.Info($"Voice command matched target: {target.targetID}", this);
-                }
+                BobCommandResult result = RequestTarget(target);
+                ProjectLog.Info($"Voice command matched target '{target.targetID}' with result: {result}", this);
 
                 return;
             }
 
-            if (text.Contains("reset") || text.Contains("cancel"))
+            if (ContainsCommand(text, "reset") || ContainsCommand(text, "cancel"))
             {
                 ResetAll();
             }
@@ -116,31 +138,64 @@ namespace Bob.SharedMobility
 
         public bool GoToTarget(BobTarget target)
         {
-            if (target == null || string.IsNullOrEmpty(target.targetID)) return false;
-            if (ShouldIgnoreDuplicateCommand(target)) return false;
+            return RequestTarget(target).WasExecutedImmediately();
+        }
+
+        public BobCommandResult RequestTarget(BobTarget target)
+        {
+            if (target == null || string.IsNullOrEmpty(target.targetID))
+            {
+                return SetLastCommandResult(BobCommandResult.IgnoredInvalidTarget);
+            }
+
+            if (TryToggleAlreadyOpenDockTarget(target, out BobCommandResult dockToggleResult))
+            {
+                return SetLastCommandResult(dockToggleResult);
+            }
+
+            if (ShouldIgnoreAlreadyOpenMapTarget(target))
+            {
+                return SetLastCommandResult(BobCommandResult.IgnoredAlreadyOpen);
+            }
+
+            if (ShouldIgnoreDuplicateCommand(target))
+            {
+                return SetLastCommandResult(BobCommandResult.IgnoredDuplicate);
+            }
 
             if (IsCommandInProgress())
             {
                 return HandleCommandDuringActiveFlight(target);
             }
 
+            ClearQueuedTarget();
             ExecuteTargetCommand(target);
-            return true;
+            return SetLastCommandResult(BobCommandResult.Accepted);
         }
 
-        private void ExecuteTargetCommand(BobTarget target)
+        private void ExecuteTargetCommand(BobTarget target, bool preserveBobPositionOnReset = false)
         {
             _currentLocID = target.targetID;
             _lastAcceptedTargetID = target.targetID;
             _lastAcceptedCommandTime = Time.unscaledTime;
 
+            if (TryExecuteRuntimeMapCommand(target, preserveBobPositionOnReset))
+            {
+                return;
+            }
+
             if (target.isRemoteTrigger)
             {
+                if (resetSceneBeforeRemoteTriggers)
+                {
+                    SilentResetEverything(target.targetID, preserveBobPositionOnReset);
+                }
+
                 TriggerRemoteTarget(target);
                 return;
             }
 
-            SilentResetEverything(target.targetID);
+            SilentResetEverything(target.targetID, true);
 
             if (target.targetObject == null)
             {
@@ -182,7 +237,13 @@ namespace Bob.SharedMobility
         public void ReleaseBobFrom(Vector3 startPos, int interactionToken)
         {
             if (!bob) return;
-            if (_activeInteractionToken != 0 && interactionToken != _activeInteractionToken) return;
+            if (!CanReleaseBob(interactionToken))
+            {
+                ProjectLog.Info(
+                    $"Ignored stale Bob release request: token={interactionToken}; active={_activeInteractionToken}",
+                    this);
+                return;
+            }
 
             _activeInteractionToken = 0;
             _currentLocID = "";
@@ -193,297 +254,11 @@ namespace Bob.SharedMobility
 
         public void ResetAll()
         {
+            ClearQueuedTarget();
+            ClearCurrentCommandLock();
             SilentResetEverything();
             if (bob) bob.ResetState();
         }
 
-        private void HandleDebugTargetShortcuts()
-        {
-            if (registeredTargets == null) return;
-
-            foreach (BobTarget target in registeredTargets)
-            {
-                if (target == null || target.debugKey == KeyCode.None) continue;
-
-                if (ProjectInput.WasKeyPressed(target.debugKey))
-                {
-                    if (TryHandleDebugBackdoor(target))
-                    {
-                        ProjectLog.Info($"Debug shortcut selected target: {target.targetID}", this);
-                        continue;
-                    }
-
-                    if (GoToTarget(target))
-                    {
-                        ProjectLog.Info($"Debug shortcut selected target: {target.targetID}", this);
-                    }
-                }
-            }
-        }
-
-        private BobTarget FindVoiceTarget(string text)
-        {
-            if (registeredTargets == null) return null;
-
-            foreach (BobTarget target in registeredTargets)
-            {
-                if (target == null || target.keywords == null) continue;
-
-                foreach (string keyword in target.keywords)
-                {
-                    if (!string.IsNullOrEmpty(keyword) && text.Contains(keyword))
-                    {
-                        return target;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        private bool TryHandleDebugBackdoor(BobTarget target)
-        {
-            if (target == null || string.IsNullOrEmpty(target.targetID)) return false;
-
-            if (target.targetID == "Mapfull" && MapViewController.ActiveInstance)
-            {
-                MapViewController activeMapController = MapViewController.ActiveInstance;
-
-                if (activeMapController.currentState == MapViewController.ViewState.Full_Screen)
-                {
-                    activeMapController.ToggleFullView();
-                    ClearCurrentCommandLock();
-                    return true;
-                }
-
-                return false;
-            }
-
-            if (target.targetObject == null) return false;
-
-            MapViewController mapController = target.targetObject.GetComponentInParent<MapViewController>(true);
-            if (!mapController) return false;
-
-            if (target.targetID == "Map" || target.targetID == "map")
-            {
-                if (mapController.currentState == MapViewController.ViewState.Small_Icon)
-                {
-                    return false;
-                }
-
-                mapController.ToggleMediumView();
-                ClearCurrentCommandLock();
-                return true;
-            }
-
-            return false;
-        }
-
-        private void ClearCurrentCommandLock()
-        {
-            _currentLocID = "";
-        }
-
-        private void TriggerRemoteTarget(BobTarget target)
-        {
-            float recommendedDelay = bob ? bob.PlayRemoteInteraction() : 0.5f;
-
-            _remoteEventTween?.Kill();
-            _remoteEventTween = DOVirtual.DelayedCall(recommendedDelay, () =>
-            {
-                target.onRemoteEvent?.Invoke();
-                ClearCurrentCommandLock();
-                _remoteEventTween = null;
-                RunQueuedTargetIfAny();
-            }).SetId(BobFlightTweenId);
-        }
-
-        private void SilentResetEverything(string ignoreTargetID = null)
-        {
-            CancelActiveFlight(true);
-
-            if (DockNavigationManager.Instance)
-            {
-                DockNavigationManager.Instance.CloseCurrentApp();
-            }
-
-            if (registeredTargets != null)
-            {
-                foreach (BobTarget target in registeredTargets)
-                {
-                    if (target == null) continue;
-                    if (ignoreTargetID != null && target.targetID == ignoreTargetID) continue;
-                    if (target.targetObject == null) continue;
-
-                    target.targetObject.GetComponent<LiquidIconController>()?.ResetState();
-                    target.targetObject.GetComponent<DockButtonController>()?.ResetState();
-                }
-            }
-        }
-
-        private static Vector3 ResolveDestination(BobTarget target, DockButtonController dockButton)
-        {
-            Vector3 destination = target.targetObject.position;
-            if (dockButton != null && dockButton.liquidBase3D != null)
-            {
-                destination = dockButton.liquidBase3D.position;
-            }
-
-            destination.z += target.zOffset;
-            destination.y += target.yOffset;
-            return destination;
-        }
-
-        private void FlyBobSequence(Vector3 targetPos, System.Action onArrival, bool isVanishOnArrival)
-        {
-            FlyBobSequence(targetPos, onArrival, isVanishOnArrival, true);
-        }
-
-        private void FlyBobSequence(
-            Vector3 targetPos,
-            System.Action onArrival,
-            bool isVanishOnArrival,
-            bool runQueuedTargetOnComplete)
-        {
-            if (!bob) return;
-
-            CancelActiveFlight(false);
-
-            Sequence sequence = DOTween.Sequence();
-            sequence.SetId(BobFlightTweenId);
-            _flightSequence = sequence;
-
-            sequence.AppendCallback(() => bob.PrepareForFlight());
-            sequence.Append(bob.AppearAnim(appearDuration));
-
-            if (waitTimeBeforeFly > 0f)
-            {
-                sequence.AppendInterval(waitTimeBeforeFly);
-            }
-
-            if (isVanishOnArrival)
-            {
-                sequence.AppendCallback(() => bob.StartFlyingShape());
-                sequence.Append(bob.transform.DOMove(targetPos, flyDuration).SetEase(Ease.InBack));
-            }
-            else
-            {
-                sequence.AppendCallback(() => bob.StartReturnShape(flyDuration));
-                sequence.Append(bob.transform.DOMove(targetPos, flyDuration).SetEase(Ease.InOutSine));
-            }
-
-            sequence.AppendCallback(() =>
-            {
-                if (isVanishOnArrival) bob.ArriveAndVanish(targetPos);
-                else bob.ArriveAndStay(targetPos);
-
-                onArrival?.Invoke();
-                CompleteFlight(sequence, runQueuedTargetOnComplete);
-            });
-
-            sequence.OnKill(() =>
-            {
-                if (_flightSequence == sequence)
-                {
-                    _flightSequence = null;
-                }
-            });
-        }
-
-        private bool ShouldIgnoreDuplicateCommand(BobTarget target)
-        {
-            if (_currentLocID == target.targetID) return true;
-
-            bool insideCooldown = Time.unscaledTime - _lastAcceptedCommandTime < duplicateCommandCooldown;
-            return insideCooldown && _lastAcceptedTargetID == target.targetID;
-        }
-
-        private bool HandleCommandDuringActiveFlight(BobTarget target)
-        {
-            if (!queueLatestCommandWhileFlying)
-            {
-                CancelActiveFlight(true);
-                ExecuteTargetCommand(target);
-                return true;
-            }
-
-            if (_queuedTarget != null && _queuedTarget.targetID == target.targetID)
-            {
-                return false;
-            }
-
-            _queuedTarget = target;
-            ProjectLog.Info($"Queued Bob target until current motion completes: {target.targetID}", this);
-            return false;
-        }
-
-        private bool IsCommandInProgress()
-        {
-            return (_flightSequence != null && _flightSequence.IsActive())
-                || (_remoteEventTween != null && _remoteEventTween.IsActive())
-                || _activeInteractionToken != 0;
-        }
-
-        private void CompleteFlight(Sequence completedSequence, bool runQueuedTargetOnComplete)
-        {
-            if (_flightSequence == completedSequence)
-            {
-                _flightSequence = null;
-            }
-
-            if (runQueuedTargetOnComplete)
-            {
-                RunQueuedTargetIfAny();
-            }
-        }
-
-        private void RunQueuedTargetIfAny()
-        {
-            if (_queuedTarget == null || IsCommandInProgress()) return;
-
-            BobTarget queuedTarget = _queuedTarget;
-            _queuedTarget = null;
-            GoToTarget(queuedTarget);
-        }
-
-        private void CancelActiveFlight(bool preserveBobPosition)
-        {
-            _remoteEventTween?.Kill();
-            _remoteEventTween = null;
-            _activeInteractionToken = 0;
-
-            if (_flightSequence != null && _flightSequence.IsActive())
-            {
-                _flightSequence.Kill(false);
-                _flightSequence = null;
-            }
-
-            DOTween.Kill(BobFlightTweenId);
-
-            if (bob)
-            {
-                bob.CancelTransientMotion(preserveBobPosition);
-            }
-        }
-
-        private int BeginTargetInteraction(string targetID)
-        {
-            int token = _nextInteractionToken++;
-            if (_nextInteractionToken == int.MaxValue)
-            {
-                _nextInteractionToken = 1;
-            }
-
-            _activeInteractionToken = token;
-            ProjectLog.Info($"Bob interaction started: {targetID}", this);
-            return token;
-        }
-
-        private static bool ShouldWaitForBobReturn(LiquidIconController iconController, DockButtonController dockButton)
-        {
-            if (iconController != null) return iconController.shouldBobReturn;
-            if (dockButton != null) return dockButton.shouldBobReturn;
-            return false;
-        }
     }
 }

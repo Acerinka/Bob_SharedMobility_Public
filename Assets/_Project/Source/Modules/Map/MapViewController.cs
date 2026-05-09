@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Bob.SharedMobility
 {
-    public class MapViewController : MonoBehaviour
+    public partial class MapViewController : MonoBehaviour
     {
         public static MapViewController ActiveInstance { get; private set; }
 
@@ -53,9 +53,15 @@ namespace Bob.SharedMobility
         public Ease openEase = Ease.OutElastic;
         public Ease closeEase = Ease.InBack;
 
-        [Header("Transition Queue")]
-        [Tooltip("Queue the latest requested map state while another map state transition is still playing.")]
+        [Header("Transition Requests")]
+        [Tooltip("When a new map state is requested mid-transition, retarget from the current visual pose instead of waiting for the old transition to finish.")]
+        public bool retargetStateChangesWhileTransitioning = true;
+        [Tooltip("Queue the latest requested map state while another map state transition is still playing. Used when retargeting is disabled.")]
         public bool queueStateChangesWhileTransitioning = true;
+
+        [Header("Surface Ownership")]
+        [Tooltip("Keep only the target map surface visible during state changes. This prevents the mini map and expanded map from animating at the same time.")]
+        public bool enforceExclusiveSurfaceOwnership = true;
 
         [Header("Visibility")]
         public ViewStateConfig smallConfig = new ViewStateConfig { stateName = "Small State Config" };
@@ -67,20 +73,37 @@ namespace Bob.SharedMobility
         public bool syncConfigVisibilityWithTransition = true;
         [Min(0f)]
         [Tooltip("Inspector-tunable delay before state-owned UI fragments switch during a map transition. Increase it when labels feel too early; decrease it when they feel late.")]
-        public float configVisibilityTransitionDelay = 0.5f;
+        public float configVisibilityTransitionDelay = 0.25f;
+        [Tooltip("Animate state-owned UI fragments instead of hard toggling them with SetActive.")]
+        public bool animateConfigVisibility = true;
+        [Min(0f)]
+        [Tooltip("Fade/scale duration for Home/Work, distance, route card, and similar state-owned fragments.")]
+        public float configVisibilityFadeDuration = 0.25f;
+        [Range(0f, 1f)]
+        [Tooltip("Scale used while a state-owned fragment is hidden. 0 is a full pop, 1 is fade-only.")]
+        public float configHiddenScaleMultiplier = 0.92f;
 
         [Header("Delayed Icons")]
         public List<GameObject> delayedIcons;
         public float appearDelay = 3.0f;
         public float appearDuration = 1.0f;
 
+        [Header("Runtime Snapshot (Read Only)")]
+        [SerializeField] private ViewState settledState = ViewState.Small_Icon;
+        [SerializeField] private string visibleSurfaceDebug = "";
+        [SerializeField] private string queuedStateDebug = "<none>";
+
         private bool _isTransitioning;
         private bool _hasQueuedState;
         private ViewState _queuedState;
         private Sequence _transitionSequence;
         private Tween _delayedCallTween;
+        private readonly MapFragmentVisibilityPresenter _fragmentVisibilityPresenter = new MapFragmentVisibilityPresenter();
 
         public bool IsTransitioning => _isTransitioning;
+        public ViewState SettledState => settledState;
+        public string VisibleSurfaceDebug => visibleSurfaceDebug;
+        public string QueuedStateDebug => queuedStateDebug;
 
         private void Awake()
         {
@@ -111,11 +134,13 @@ namespace Bob.SharedMobility
             ForceInitView(viewMedium, false, mediumTargetScale);
             ForceInitView(viewFull, false, fullTargetScale);
 
+            _fragmentVisibilityPresenter.Cache(smallConfig, mediumConfig, fullConfig);
             ResetIconController(viewSmall, startScale);
             CloseSelectorMenuInstant();
             HideDelayedIconsInstant();
             UpdateColliderSize(ViewState.Small_Icon);
-            ApplyConfig(smallConfig);
+            _fragmentVisibilityPresenter.Apply(smallConfig, configHiddenScaleMultiplier);
+            RefreshRuntimeSnapshot();
         }
 
         public void TriggerMediumView()
@@ -149,14 +174,20 @@ namespace Bob.SharedMobility
 
         public void SwitchToState(ViewState newState, bool instant = false)
         {
-            if (_isTransitioning && !instant && queueStateChangesWhileTransitioning)
+            if (_isTransitioning && !instant)
             {
-                if (currentState != newState)
+                if (currentState == newState)
                 {
-                    QueueStateChange(newState);
+                    return;
                 }
 
-                return;
+                if (!retargetStateChangesWhileTransitioning && queueStateChangesWhileTransitioning)
+                {
+                    QueueStateChange(newState);
+                    return;
+                }
+
+                ClearQueuedState();
             }
 
             if (!_isTransitioning && currentState == newState && !instant)
@@ -175,6 +206,11 @@ namespace Bob.SharedMobility
             _delayedCallTween?.Kill();
             StopViewAnimations();
 
+            if (enforceExclusiveSurfaceOwnership)
+            {
+                HideNonTargetViewsImmediately(targetView);
+            }
+
             if (instant)
             {
                 ClearQueuedState();
@@ -189,7 +225,7 @@ namespace Bob.SharedMobility
             AppendHideNonTargetViews(sequence, targetView);
             sequence.AppendCallback(() => PrepareTargetView(targetView, endScale));
             AppendShowTargetView(sequence, targetView, endScale);
-            AppendConfigVisibilitySync(sequence, newState);
+            AppendConfigVisibilitySync(sequence, newState, targetView);
 
             sequence.OnKill(() =>
             {
@@ -202,12 +238,15 @@ namespace Bob.SharedMobility
             {
                 CompleteTransition(newState, sequence);
             });
+
+            RefreshRuntimeSnapshot();
         }
 
         public void QueueStateChange(ViewState newState)
         {
             _queuedState = newState;
             _hasQueuedState = true;
+            RefreshRuntimeSnapshot();
         }
 
         public void CycleNext()
@@ -238,311 +277,26 @@ namespace Bob.SharedMobility
             SwitchToState(ViewState.Small_Icon);
         }
 
-        public void OpenSelectorMenu()
+        [ContextMenu("Diagnostics/Validate Map Runtime State")]
+        public void ValidateRuntimeState()
         {
-            if (!selectorMenu) return;
+            RefreshRuntimeSnapshot();
 
-            selectorMenu.gameObject.SetActive(true);
-            selectorMenu.transform.DOKill();
-            selectorMenu.transform.localScale = Vector3.zero;
-            selectorMenu.transform.DOScale(selectorTargetScale, popDuration).SetEase(openEase, elasticity);
-            selectorMenu.OpenChildren();
-        }
-
-        public void CloseSelectorMenu()
-        {
-            if (!selectorMenu || !selectorMenu.gameObject.activeSelf) return;
-
-            selectorMenu.transform.DOKill();
-            selectorMenu.transform
-                .DOScale(Vector3.zero, 0.2f)
-                .OnComplete(() => selectorMenu.gameObject.SetActive(false));
-        }
-
-        private void ResolveTargetView(ViewState state, out GameObject targetView, out Vector3 targetScale)
-        {
-            switch (state)
+            int visibleSurfaceCount = CountVisibleSurfaces();
+            if (enforceExclusiveSurfaceOwnership && visibleSurfaceCount > 1)
             {
-                case ViewState.Medium_Screen:
-                    targetView = viewMedium;
-                    targetScale = mediumTargetScale;
-                    break;
-                case ViewState.Full_Screen:
-                    targetView = viewFull;
-                    targetScale = fullTargetScale;
-                    break;
-                default:
-                    targetView = viewSmall;
-                    targetScale = startScale * smallIconFixMultiplier;
-                    break;
+                ProjectLog.Warning(
+                    $"Map surface ownership is broken: visible={visibleSurfaceDebug}; requested={currentState}; settled={settledState}; transitioning={_isTransitioning}",
+                    this);
+            }
+
+            if (_isTransitioning && _transitionSequence == null)
+            {
+                ProjectLog.Warning(
+                    $"Map transition flag is set without an active transition sequence. requested={currentState}; visible={visibleSurfaceDebug}",
+                    this);
             }
         }
 
-        private void StopViewAnimations()
-        {
-            StopViewAnimation(viewSmall);
-            StopViewAnimation(viewMedium);
-            StopViewAnimation(viewFull);
-        }
-
-        private static void StopViewAnimation(GameObject view)
-        {
-            if (!view) return;
-
-            view.transform.DOKill();
-            view.GetComponent<LiquidIconController>()?.StopAllAnimations();
-        }
-
-        private void AppendConfigVisibilitySync(Sequence sequence, ViewState newState)
-        {
-            if (!syncConfigVisibilityWithTransition) return;
-
-            sequence.InsertCallback(
-                Mathf.Max(0f, configVisibilityTransitionDelay),
-                () => ApplyConfigForState(newState));
-        }
-
-        private void AppendHideNonTargetViews(Sequence sequence, GameObject targetView)
-        {
-            AppendHideView(sequence, viewSmall, targetView);
-            AppendHideView(sequence, viewMedium, targetView);
-            AppendHideView(sequence, viewFull, targetView);
-
-            sequence.AppendCallback(() =>
-            {
-                DeactivateIfNotTarget(viewSmall, targetView);
-                DeactivateIfNotTarget(viewMedium, targetView);
-                DeactivateIfNotTarget(viewFull, targetView);
-            });
-        }
-
-        private void AppendHideView(Sequence sequence, GameObject view, GameObject targetView)
-        {
-            if (view && view != targetView && view.activeSelf)
-            {
-                sequence.Join(view.transform.DOScale(Vector3.zero, retractDuration).SetEase(closeEase));
-            }
-        }
-
-        private void PrepareTargetView(GameObject targetView, Vector3 targetScale)
-        {
-            if (!targetView) return;
-
-            ResetIconController(targetView, targetScale);
-            targetView.SetActive(true);
-            targetView.transform.DOKill();
-            targetView.transform.localScale = Vector3.zero;
-        }
-
-        private void AppendShowTargetView(Sequence sequence, GameObject targetView, Vector3 targetScale)
-        {
-            if (!targetView) return;
-
-            sequence.Append(targetView.transform.DOScale(targetScale, popDuration).SetEase(openEase, elasticity));
-        }
-
-        private void ForceOnlyTargetView(GameObject targetView, Vector3 targetScale)
-        {
-            ResetIconController(targetView, targetScale);
-            ForceViewState(viewSmall, viewSmall == targetView, viewSmall == targetView ? targetScale : Vector3.zero);
-            ForceViewState(viewMedium, viewMedium == targetView, viewMedium == targetView ? targetScale : Vector3.zero);
-            ForceViewState(viewFull, viewFull == targetView, viewFull == targetView ? targetScale : Vector3.zero);
-        }
-
-        private void ForceCurrentStateConsistency()
-        {
-            ResolveTargetView(currentState, out GameObject targetView, out Vector3 targetScale);
-            ForceOnlyTargetView(targetView, targetScale);
-            ApplyConfigForState(currentState);
-            HandleDelayedIcons(currentState);
-        }
-
-        private static void ForceViewState(GameObject view, bool isActive, Vector3 scale)
-        {
-            if (!view) return;
-
-            view.transform.DOKill();
-            view.SetActive(isActive);
-            view.transform.localScale = isActive ? scale : Vector3.zero;
-        }
-
-        private static void DeactivateIfNotTarget(GameObject view, GameObject targetView)
-        {
-            if (view && view != targetView)
-            {
-                view.SetActive(false);
-            }
-        }
-
-        private void CompleteTransition(ViewState newState, Sequence completedSequence)
-        {
-            if (completedSequence == null || _transitionSequence == completedSequence)
-            {
-                _transitionSequence = null;
-            }
-
-            _isTransitioning = false;
-            ApplyConfigForState(newState);
-            HandleDelayedIcons(newState);
-            RunQueuedStateChange();
-        }
-
-        private void RunQueuedStateChange()
-        {
-            if (!_hasQueuedState) return;
-
-            ViewState queuedState = _queuedState;
-            ClearQueuedState();
-
-            if (queuedState == currentState)
-            {
-                ForceCurrentStateConsistency();
-                return;
-            }
-
-            SwitchToState(queuedState);
-        }
-
-        private void ClearQueuedState()
-        {
-            _hasQueuedState = false;
-        }
-
-        private static void ResetIconController(GameObject view, Vector3 scale)
-        {
-            if (!view) return;
-
-            LiquidIconController iconController = view.GetComponent<LiquidIconController>();
-            if (!iconController) return;
-
-            iconController.ForceUpdateOriginalScale(scale);
-            iconController.ResetState();
-        }
-
-        private void UpdateColliderSize(ViewState state)
-        {
-            if (targetCollider == null) return;
-
-            switch (state)
-            {
-                case ViewState.Medium_Screen:
-                    targetCollider.size = mediumColliderSize;
-                    break;
-                case ViewState.Full_Screen:
-                    targetCollider.size = fullColliderSize;
-                    break;
-                default:
-                    targetCollider.size = smallColliderSize;
-                    break;
-            }
-        }
-
-        private void ApplyConfigForState(ViewState state)
-        {
-            switch (state)
-            {
-                case ViewState.Medium_Screen:
-                    ApplyConfig(mediumConfig);
-                    break;
-                case ViewState.Full_Screen:
-                    ApplyConfig(fullConfig);
-                    break;
-                default:
-                    ApplyConfig(smallConfig);
-                    break;
-            }
-        }
-
-        private static void ApplyConfig(ViewStateConfig config)
-        {
-            SetObjectsActive(config.objectsToHide, false);
-            SetObjectsActive(config.objectsToShow, true);
-        }
-
-        private static void SetObjectsActive(List<GameObject> objects, bool isActive)
-        {
-            if (objects == null) return;
-
-            foreach (GameObject target in objects)
-            {
-                if (target) target.SetActive(isActive);
-            }
-        }
-
-        private void HandleDelayedIcons(ViewState newState)
-        {
-            _delayedCallTween?.Kill();
-
-            if (newState == ViewState.Small_Icon)
-            {
-                HideDelayedIconsAnimated();
-                return;
-            }
-
-            _delayedCallTween = DOVirtual.DelayedCall(appearDelay, ShowDelayedIcons);
-        }
-
-        private void ShowDelayedIcons()
-        {
-            if (delayedIcons == null) return;
-
-            foreach (GameObject icon in delayedIcons)
-            {
-                if (!icon) continue;
-
-                icon.SetActive(true);
-                icon.transform.localScale = Vector3.zero;
-                icon.transform.DOScale(Vector3.one, appearDuration).SetEase(Ease.OutSine);
-            }
-        }
-
-        private void HideDelayedIconsAnimated()
-        {
-            if (delayedIcons == null) return;
-
-            foreach (GameObject icon in delayedIcons)
-            {
-                if (!icon) continue;
-
-                icon.transform.DOKill();
-                icon.transform
-                    .DOScale(Vector3.zero, 0.3f)
-                    .OnComplete(() => icon.SetActive(false));
-            }
-        }
-
-        private void HideDelayedIconsInstant()
-        {
-            if (delayedIcons == null) return;
-
-            foreach (GameObject icon in delayedIcons)
-            {
-                if (!icon) continue;
-
-                icon.transform.localScale = Vector3.zero;
-                icon.SetActive(false);
-            }
-        }
-
-        private void CloseSelectorMenuInstant()
-        {
-            if (!selectorMenu) return;
-
-            selectorMenu.transform.localScale = Vector3.zero;
-            selectorMenu.gameObject.SetActive(false);
-        }
-
-        private static void ForceInitView(GameObject view, bool active, Vector3 scale)
-        {
-            if (!view) return;
-
-            view.SetActive(active);
-            view.transform.localScale = active ? scale : Vector3.zero;
-
-            if (active)
-            {
-                ResetIconController(view, scale);
-            }
-        }
     }
 }

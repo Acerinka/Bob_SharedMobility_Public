@@ -41,6 +41,7 @@ namespace Bob.SharedMobility
         private Vector3 _initLocalPos; 
         private Vector3 _initScale;    
         private bool _isOpen = false; 
+        private Tween _autoExpandTween;
 
         public bool IsOpen => _isOpen;
 
@@ -62,8 +63,14 @@ namespace Bob.SharedMobility
         {
             if (isRoot && autoExpandOnStart)
             {
-                DOVirtual.DelayedCall(0.5f, () => OpenChildren());
+                ScheduleAutoExpand(0.5f);
             }
+        }
+
+        private void OnDisable()
+        {
+            CancelAutoExpandTree();
+            _isOpen = false;
         }
 
         public void OnPointerClick(PointerEventData eventData)
@@ -98,6 +105,8 @@ namespace Bob.SharedMobility
 
         public void OpenChildren()
         {
+            CancelAutoExpand();
+
             if (_isOpen || childItems == null || childItems.Count == 0) return;
             _isOpen = true;
             
@@ -131,13 +140,15 @@ namespace Bob.SharedMobility
                 if (child.autoExpandOnStart)
                 {
                     float autoExpandDelay = delay + popDuration * 0.8f;
-                    DOVirtual.DelayedCall(autoExpandDelay, () => child.OpenChildren());
+                    child.ScheduleAutoExpand(autoExpandDelay);
                 }
             }
         }
 
         public void CloseChildren()
         {
+            CancelAutoExpandTree();
+
             if (!_isOpen) return;
             _isOpen = false;
 
@@ -207,6 +218,8 @@ namespace Bob.SharedMobility
 
         public void ShowAnimate(float delay, float duration, float elastic)
         {
+            CancelAutoExpand();
+
             gameObject.SetActive(true);
             var iconCtrl = GetComponent<LiquidIconController>();
             if (iconCtrl) iconCtrl.PlaySpawnAnimation(duration * 0.8f);
@@ -223,6 +236,9 @@ namespace Bob.SharedMobility
 
         public void HideAnimate(Vector3? targetWorldPos = null)
         {
+            CancelAutoExpandTree();
+            _isOpen = false;
+
             Vector3 dest = targetWorldPos ?? transform.position;
 
             transform.DOKill(); 
@@ -231,6 +247,57 @@ namespace Bob.SharedMobility
 
             transform.DOScale(Vector3.zero, retractDuration).SetEase(Ease.InQuad)
                      .OnComplete(() => gameObject.SetActive(false));
+        }
+
+        public void CancelExternalRuntimeControl(bool closeChildTree)
+        {
+            CancelAutoExpand();
+            transform.DOKill();
+            _isOpen = false;
+            transform.localPosition = _initLocalPos;
+
+            if (!closeChildTree || childItems == null) return;
+
+            foreach (LiquidMenuItem child in childItems)
+            {
+                if (child == null) continue;
+
+                child.CancelExternalRuntimeControl(true);
+                child._isOpen = false;
+                child.transform.localScale = Vector3.zero;
+                child.gameObject.SetActive(false);
+            }
+        }
+
+        private void ScheduleAutoExpand(float delay)
+        {
+            CancelAutoExpand();
+            _autoExpandTween = DOVirtual.DelayedCall(Mathf.Max(0f, delay), () =>
+            {
+                _autoExpandTween = null;
+                OpenChildren();
+            });
+        }
+
+        private void CancelAutoExpandTree()
+        {
+            CancelAutoExpand();
+
+            if (childItems == null) return;
+
+            foreach (LiquidMenuItem child in childItems)
+            {
+                if (child != null)
+                {
+                    child.CancelAutoExpandTree();
+                }
+            }
+        }
+
+        private void CancelAutoExpand()
+        {
+            _autoExpandTween?.Kill();
+            _autoExpandTween = null;
         }
     }
 }
